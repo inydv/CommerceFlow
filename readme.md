@@ -602,3 +602,188 @@ Suitable for infinite scrolling	              Yes, but less ideal	            Ex
 Suitable for admin tables with page numbers	  Excellent	                      Depends on requirements
 ```
 
+### PostgreSQL Transactions, ACID and Concurrency
+
+```
+Property	        Meaning	                                                                          CommerceFlow example
+A — Atomicity	    All operations succeed, or none are committed	                                    Don't create an order if inventory cannot be deducted
+C — Consistency	  Database constraints and defined invariants remain valid	                        Stock cannot become negative; sales must have valid order records
+I — Isolation	    Concurrent transactions follow defined visibility and interference rules	        Customers cannot both claim the last item
+D — Durability	  Committed changes survive failures under the database's durability guarantees	    Restarting Node.js doesn't erase an order
+```
+
+```
+BEGIN;
+
+UPDATE products
+SET stock = stock - 1
+WHERE id = 'PRODUCT_UUID';
+
+INSERT INTO orders (...);
+
+COMMIT;
+```
+
+- BEGIN starts the transaction.
+- UPDATE changes inventory.
+- INSERT creates an order.
+- COMMIT makes the transaction's changes permanent.
+
+- If an operation fails, we use: ROLLBACK;
+
+### Deliberately reproduce an overselling bug
+
+- Terminal A — Customer A reads the inventory
+
+```
+BEGIN;
+
+SELECT stock
+FROM products
+WHERE id = 'YOUR_PRODUCT_UUID';
+```
+
+- Terminal B — Customer B reads the same inventory
+
+```
+BEGIN;
+
+SELECT stock
+FROM products
+WHERE id = 'YOUR_PRODUCT_UUID';
+```
+
+- Terminal A — Creates the order
+
+```
+UPDATE products
+SET stock = 0
+WHERE id = 'YOUR_PRODUCT_UUID';
+
+INSERT INTO orders (
+    id, product_id, quantity, unit_price, total_amount
+)
+VALUES (
+    gen_random_uuid(),
+    'YOUR_PRODUCT_UUID',
+    1,
+    80000,
+    80000
+);
+
+COMMIT;
+```
+
+- Terminal B — Creates another order using stale information
+
+```
+UPDATE products
+SET stock = 0
+WHERE id = 'YOUR_PRODUCT_UUID';
+
+INSERT INTO orders (
+    id, product_id, quantity, unit_price, total_amount
+)
+VALUES (
+    gen_random_uuid(),
+    'YOUR_PRODUCT_UUID',
+    1,
+    80000,
+    80000
+);
+
+COMMIT;
+```
+
+- Fix it using an atomic conditional UPDATE
+
+```
+UPDATE products
+SET stock = stock - 1
+WHERE id = 'YOUR_PRODUCT_UUID'
+  AND stock >= 1
+RETURNING id, price, stock;
+```
+
+- But why do we still need a transaction?
+
+```
+Imagine the first operation succeeds, but the second fails due to a database constraint or another error.
+
+Without a transaction, inventory remains deducted even though no order exists.
+```
+
+```
+BEGIN;
+
+UPDATE products
+SET stock = stock - 1
+WHERE id = 'YOUR_PRODUCT_UUID'
+  AND stock >= 1
+RETURNING id, price;
+
+INSERT INTO orders (...);
+
+COMMIT;
+```
+
+### PostgreSQL Transaction Isolation Levels
+
+PostgreSQL supports these four SQL isolation levels:
+
+- Read Uncommitted Behaves like Read Committed
+- READ COMMITTED — Each statement sees a fresh committed snapshot (Har query ko latest committed data)
+- REPEATABLE READ — Transaction reads use a stable snapshot (Ek transaction mein same snapshot)
+- SERIALIZABLE — Concurrent transactions must behave as though executed in some serial order, or one is rejected (Result aisa ho jaise transactions ek-ek karke chali hon)
+
+- PostgreSQL's default is READ COMMITTED.
+
+# READ COMMITTED
+
+- Products list karna.
+- Order create karna, jab stock safely conditional update se deduct ho.
+- Normal CRUD operations.
+
+# REPEATABLE READ
+
+- Stock 10 hai.
+- Customer A transaction start karta hai, stock 10 dekhta hai.
+- Customer B stock 5 kar deta hai aur commit bhi kar deta hai.
+- Lekin Customer A jab apni purani transaction mein dobara read karega, usse ab bhi 10 dikhega.
+
+Maan le tum ek financial report bana rahe ho jisme multiple SQL queries chalti hain.
+
+- Pehli query total sales count karti hai.
+- Doosri query sales amount calculate karti hai.
+- Beech mein naye orders aa rahe hain.
+
+- await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ');
+
+- Agar tumhare transaction ke snapshot ke baad doosri transaction kisi row ko update kar chuki hai aur tum bhi us row ko update karna chahte ho, PostgreSQL serialization error de sakta hai. Aisi condition mein transaction retry karni pad sakti hai.
+
+# SERIALIZABLE
+
+Maan le warehouse mein 2 employees hain.
+Company ka rule hai:Kam se kam 1 employee available rehna chahiye.
+
+Ab do admins ek hi time par:
+
+- Admin A employee 1 ko unavailable kar raha hai.
+- Admin B employee 2 ko unavailable kar raha hai.
+
+Dono ne pehle check kiya aur dekha 2 available employees hain.
+Agar dono changes commit ho gaye, toh 0 employees available bachenge.
+
+- SERIALIZABLE mein PostgreSQL aise conflicting transaction patterns detect karke ek transaction ko reject kar sakta hai.
+
+- await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+
+- Jab multiple rows ya queries ke beech koi important business rule maintain karna ho aur simple atomic updates ya row locking se use safely enforce karna difficult ho.
+
+Examples:
+
+- Booking systems mein complex allocation rules.
+- Multiple accounts ya resources ke cross-row constraints.
+- Financial workflows jahan several reads ke basis par dependent writes hoti hain.
+
+- Kya dikkat hai? Kuch transactions 40001 serialization error ke saath fail ho sakti hain. Application ko poori transaction dobara execute karne ka retry mechanism banana padta hai.
