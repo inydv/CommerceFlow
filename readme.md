@@ -731,8 +731,8 @@ COMMIT;
 
 PostgreSQL supports these four SQL isolation levels:
 
-- Read Uncommitted Behaves like Read Committed
-- READ COMMITTED — Each statement sees a fresh committed snapshot (Har query ko latest committed data)
+- Read Uncommitted - Behaves like Read Committed
+- READ COMMITTED — Each statement sees a fresh committed snapshot (Har query ka latest committed data)
 - REPEATABLE READ — Transaction reads use a stable snapshot (Ek transaction mein same snapshot)
 - SERIALIZABLE — Concurrent transactions must behave as though executed in some serial order, or one is rejected (Result aisa ho jaise transactions ek-ek karke chali hon)
 
@@ -787,3 +787,135 @@ Examples:
 - Financial workflows jahan several reads ke basis par dependent writes hoti hain.
 
 - Kya dikkat hai? Kuch transactions 40001 serialization error ke saath fail ho sakti hain. Application ko poori transaction dobara execute karne ka retry mechanism banana padta hai.
+
+- READ COMMITTED mein jab do transactions same row ko conditional UPDATE karti hain, toh PostgreSQL lock aur condition recheck ki wajah se safely handle kar sakta hai. Lekin jab business condition multiple rows par depend karti hai aur transactions alag rows update karti hain, toh sirf row locking enough nahi hoti.
+- Bas ye difference samajh gaye, toh READ COMMITTED vs SERIALIZABLE ka main doubt clear ho jayega.
+
+### PostgreSQL Locking & Deadlocks
+
+# Pessimistic Locking
+
+- FOR UPDATE PostgreSQL ko bolta hai: Is row ko meri transaction ke liye lock karo. Jab tak main COMMIT ya ROLLBACK nahi karta, conflicting transactions ko wait karna padega.
+
+```
+SELECT *
+FROM products
+WHERE id = 'PRODUCT_ID'
+FOR UPDATE;
+```
+
+Kab use karte hain?
+
+- Inventory reserve karte waqt, jab stock read karne ke baad multiple decisions lene hon.
+- Wallet ya bank account ka balance modify karte waqt.
+
+- Har update ke liye alag SELECT FOR UPDATE zaruri nahi hai. Hamara existing atomic conditional UPDATE already appropriate row locking karta hai.
+
+# Deadlock kya hota hai?
+
+- Ab soch Customer A ke paas Product 1 ka lock hai aur Customer B ke paas Product 2 ka lock hai.
+- A ko Product 2 bhi chahiye.
+- B ko Product 1 bhi chahiye.
+- Dono ek-doosre ke lock ka wait kar rahe hain.
+
+- PostgreSQL deadlock automatically detect karke ek transaction ko abort karta hai, taaki doosri continue kar sake.
+
+```
+CREATE TABLE IF NOT EXISTS deadlock_lab (
+    id INTEGER PRIMARY KEY,
+    stock INTEGER NOT NULL
+);
+
+INSERT INTO deadlock_lab (id, stock)
+VALUES (1, 10), (2, 10)
+ON CONFLICT (id)
+DO UPDATE SET stock = EXCLUDED.stock;
+```
+
+- Terminal A — Product 1 lock karega
+
+```
+BEGIN;
+
+UPDATE deadlock_lab
+SET stock = stock - 1
+WHERE id = 1;
+```
+
+- Terminal B — Product 2 lock karega
+
+```
+BEGIN;
+
+UPDATE deadlock_lab
+SET stock = stock - 1
+WHERE id = 2;
+```
+
+- Terminal A — Ab Product 2 bhi chahiye
+
+```
+UPDATE deadlock_lab
+SET stock = stock - 1
+WHERE id = 2;
+```
+
+- Terminal B — Ab Product 1 bhi chahiye
+
+```
+UPDATE deadlock_lab
+SET stock = stock - 1
+WHERE id = 1;
+```
+
+- PostgreSQL ko deadlock detect hoga aur dono mein se kisi ek transaction ko error milega: ERROR: deadlock detected SQLSTATE: 40P01
+
+- Production mein aur bhi precautions useful hote hain: transactions short rakho, unnecessary database work avoid karo, aur 40P01 deadlock errors ke liye bounded retry logic rakho.
+
+# Optimistic Locking
+
+- Main pehle lock hold nahi karunga. Update karte waqt check karunga ki kisi aur ne data change toh nahi kiya.
+
+- Iske liye hum aksar version column use karte hain.
+
+- Customer A aur Customer B dono ne version 1 read kiya.
+- A ne update kiya: stock 9, version 2.
+- B bhi version 1 ke basis par update karne aaya.
+- Database ne dekha ki current version 2 hai.
+- B ka update reject ho gaya.
+
+```
+ALTER TABLE isolation_lab
+ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 1;
+
+UPDATE isolation_lab
+SET stock = 10, version = 1
+WHERE id = 1;
+```
+
+- Customer A update karta hai
+
+```
+UPDATE isolation_lab
+SET stock = 9,
+    version = version + 1
+WHERE id = 1
+  AND version = 1
+RETURNING stock, version;
+```
+
+- Customer B purane version se update karta hai
+
+```
+UPDATE isolation_lab
+SET stock = 8,
+    version = version + 1
+WHERE id = 1
+  AND version = 1
+RETURNING stock, version;
+```
+
+- Kyunki version ab 1 nahi, 2 hai.
+- B ko latest data dobara read karke apna decision repeat karna hoga.
+
+- Important: Optimistic locking bhi internally UPDATE ke time PostgreSQL row locks use karti hai. Difference ye hai ki hum pehle se application-level read lock hold nahi kar rahe; hum version compare karke stale updates detect kar rahe hain.
