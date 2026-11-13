@@ -36,3 +36,13 @@ export const listProductsSchema = z.object({
 export const productIdSchema = z.object({
   id: z.string().uuid(),
 });
+
+// Validate cursor pagination query parameters.
+export const cursorPaginationSchema = z.object({
+  // Return 20 products unless the client requests another amount.
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+
+  // The first request doesn't have a cursor.
+  // Later requests use the cursor returned by the API.
+  cursor: z.string().min(1).max(1024).optional(),
+});

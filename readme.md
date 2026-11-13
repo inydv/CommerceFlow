@@ -437,4 +437,168 @@ There is no universal correct number. It depends on:
 
 - inspect the table: psql -h localhost -U commerce_flow_user -d commerce_flow
 - table products: \d products
-- Check whether the table is empty: SELECT * FROM products;
+- Check whether the table is empty: SELECT \* FROM products;
+
+### Generate 100,000 sample products for our performance experiment.
+
+```
+INSERT INTO products (
+    id,
+    name,
+    description,
+    price,
+    stock,
+    category
+)
+SELECT
+    gen_random_uuid(),
+    'Product ' || number,
+    'Performance testing product',
+    ROUND((RANDOM() * 100000 + 1)::NUMERIC, 2),
+    FLOOR(RANDOM() * 1000)::INTEGER,
+
+    -- Distribute products across four categories.
+    CASE
+        WHEN number % 4 = 0 THEN 'Electronics'
+        WHEN number % 4 = 1 THEN 'Clothing'
+        WHEN number % 4 = 2 THEN 'Books'
+        ELSE 'Furniture'
+    END
+FROM generate_series(1, 100000) AS number;
+```
+
+- SELECT COUNT(\*) FROM products;
+
+- PostgreSQL uses table statistics to estimate how many rows a query will return and decide which execution plan is likely to be cheaper. ANALYZE refreshes those statistics.
+- ANALYZE products;
+
+### Indexing
+
+- Without an index, PostgreSQL may need to inspect rows one by one. This is called a Sequential Scan.
+- With an index, PostgreSQL can use a data structure to locate matching rows without scanning the entire table.
+- PostgreSQL commonly uses B-tree indexes by default. A B-tree keeps indexed values organized so the database can efficiently find matching entries.
+- Important: PostgreSQL automatically creates an index for a PRIMARY KEY and UNIQUE constraint. Our products.id is already indexed because we defined it as a primary key.
+
+What happens if you create too many indexes?
+
+`Too few indexes	                  Too many indexes
+Some reads become slow	            Writes become slower
+More rows may need scanning	        More disk space is consumed
+More CPU may be used for searches	  More maintenance and cache pressure
+Filtering can become expensive	    Updates may require extra index work`
+
+### Measure performance before creating an index
+
+```
+EXPLAIN (ANALYZE, BUFFERS)
+SELECT
+    id,
+    name,
+    price,
+    created_at
+FROM products
+WHERE category = 'Electronics'
+ORDER BY created_at DESC, id DESC
+LIMIT 20;
+```
+
+- Seq Scan - PostgreSQL reads rows by scanning the table.
+- Filter - It checks which rows match the category.
+- Sort - It orders matching rows.
+- Limit - It returns only the first 20 rows.
+- Execution Time - Measured execution time for this query.
+- Buffers - Shows database pages accessed during execution.
+
+### Create a composite index
+
+We can create an index that supports both the category filter and the requested ordering.
+
+- WHERE category = 'Electronics' ORDER BY created_at DESC, id DESC
+
+```
+CREATE INDEX idx_products_category_created_id
+ON products (
+    category,
+    created_at DESC,
+    id DESC
+);
+```
+
+- This is called a composite index because it contains multiple columns.
+
+Why this order?
+
+- category comes first because we filter by it.
+- created_at comes next because we sort by it.
+- id comes last because it breaks ties in the sort order.
+
+A useful distinction:
+
+- shared hit means the required page was already in PostgreSQL's shared buffer cache.
+- shared read means PostgreSQL had to read the page into that cache.
+
+Check the table and index sizes:
+
+```
+SELECT
+    pg_size_pretty(pg_relation_size('products')) AS table_size,
+    pg_size_pretty(pg_indexes_size('products')) AS indexes_size,
+    pg_size_pretty(pg_total_relation_size('products')) AS total_size;
+```
+
+List the indexes on your table:
+
+```
+SELECT
+    indexname,
+    indexdef
+FROM pg_indexes
+WHERE tablename = 'products';
+```
+
+What if we index every column?
+
+- PostgreSQL has more indexes to maintain during writes.
+- Database storage usage increases.
+- Index pages compete for memory and cache.
+- Some indexes may be redundant and provide little additional benefit.
+
+- Remove Index: DROP INDEX idx_products_category_created_id;
+
+### Offset vs Cursor-Based Pagination
+
+```
+SELECT *
+FROM products
+ORDER BY created_at DESC, id DESC
+LIMIT 20 OFFSET 50000;
+```
+
+- PostgreSQL cannot simply jump to the 50,001st row in an ordered result using a normal B-tree index.
+- It generally needs to process the preceding 50,000 entries before returning the next 20.
+
+- Instead of saying: Skip 50,000 products and give me the next 20.
+- We say: Give me 20 products that come after this particular product in the ordering.
+
+- The cursor stores the last product's created_at and id.
+
+```
+SELECT *
+FROM products
+WHERE (created_at, id) < ($1, $2)
+ORDER BY created_at DESC, id DESC
+LIMIT 20;
+```
+
+### When should you use each approach?
+
+```
+Feature	                                      OFFSET pagination	              Cursor pagination
+Simple implementation	                        Excellent	                      More complex
+Jump directly to page 100	                    Yes	                            Not naturally
+Large dataset performance	                    Can degrade with deep pages	    Often much better
+New records inserted between requests	        Can cause duplicates or skips	  More stable for a fixed ordering
+Suitable for infinite scrolling	              Yes, but less ideal	            Excellent
+Suitable for admin tables with page numbers	  Excellent	                      Depends on requirements
+```
+

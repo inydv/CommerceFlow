@@ -163,4 +163,46 @@ export const productRepository = {
 
     return mapProduct(result.rows[0]);
   },
+
+  // Get the next group of products using keyset pagination.
+  async findByCursor({ cursor, limit }) {
+    // Keep the exact PostgreSQL timestamp for our cursor.
+    // JavaScript Date objects lose microsecond precision.
+    const columns = `
+    *,
+    created_at::text AS cursor_created_at
+  `;
+
+    // The first page doesn't need a cursor condition.
+    // Separate queries also avoid an unnecessary OR condition.
+    const query = cursor
+      ? `
+      SELECT ${columns}
+      FROM products
+      WHERE (created_at, id) < ($1::timestamptz, $2::uuid)
+      ORDER BY created_at DESC, id DESC
+      LIMIT $3;
+    `
+      : `
+      SELECT ${columns}
+      FROM products
+      ORDER BY created_at DESC, id DESC
+      LIMIT $1;
+    `;
+
+    const values = cursor
+      ? [cursor.createdAt, cursor.id, limit + 1]
+      : [limit + 1];
+
+    const result = await pool.query(query, values);
+
+    // Keep the raw rows so we can build an exact cursor.
+    return {
+      products: result.rows.map(mapProduct),
+      positions: result.rows.map((row) => ({
+        createdAt: row.cursor_created_at,
+        id: row.id,
+      })),
+    };
+  },
 };

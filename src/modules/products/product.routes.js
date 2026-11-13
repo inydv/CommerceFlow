@@ -7,6 +7,7 @@ import {
   updateProductSchema,
   listProductsSchema,
   productIdSchema,
+  cursorPaginationSchema,
 } from "./product.validation.js";
 
 import { validateRequest } from "../../middleware/validate-request.js";
@@ -25,6 +26,14 @@ router.get(
   "/",
   validateRequest(listProductsSchema, "query"),
   productController.getProducts,
+);
+
+// Cursor-based product listing.
+// Register this before /:id so "feed" is not treated as a product ID.
+router.get(
+  "/feed",
+  validateRequest(cursorPaginationSchema, "query"),
+  productController.getProductsByCursor,
 );
 
 // Get one product after validating its URL ID

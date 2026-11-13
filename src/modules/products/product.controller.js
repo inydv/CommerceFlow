@@ -59,4 +59,17 @@ export const productController = {
       data: product,
     });
   },
+
+  // Return products using cursor-based pagination.
+  async getProductsByCursor(req, res) {
+    const result = await productService.getProductsByCursor(
+      req.validated.query,
+    );
+
+    res.status(200).json({
+      success: true,
+      data: result.products,
+      pagination: result.pagination,
+    });
+  },
 };
