@@ -21,6 +21,7 @@ export const orderService = {
         `
         UPDATE products
         SET stock = stock - $1,
+            version = version + 1,
             updated_at = NOW()
         WHERE id = $2
           AND stock >= $1

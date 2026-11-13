@@ -21,6 +21,10 @@ const mapProduct = (row) => {
 
     stock: row.stock,
     category: row.category,
+
+    // Clients need this version for safe updates.
+    version: row.version,
+
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -106,7 +110,7 @@ export const productRepository = {
   },
 
   // Update only the fields supplied by the client
-  async update(id, updateData) {
+  async update(id, expectedVersion, updateData) {
     // Only these fields are allowed to become SQL column names.
     // Never insert raw user input into SQL identifiers.
     const allowedColumns = {
@@ -117,7 +121,8 @@ export const productRepository = {
       category: "category",
     };
 
-    const values = [id];
+    // $1 = product ID, $2 = version the client last read.
+    const values = [id, expectedVersion];
     const assignments = [];
 
     // Build an UPDATE statement containing only supplied fields.
@@ -136,6 +141,9 @@ export const productRepository = {
       assignments.push(`${column} = $${values.length}`);
     }
 
+    // The version increases only when an update succeeds.
+    assignments.push("version = version + 1");
+
     // Always update the modification timestamp.
     assignments.push("updated_at = NOW()");
 
@@ -143,11 +151,14 @@ export const productRepository = {
       UPDATE products
       SET ${assignments.join(", ")}
       WHERE id = $1
+        AND version = $2
       RETURNING *;
     `;
 
     const result = await pool.query(query, values);
 
+    // null means either the product doesn't exist
+    // or its current version is different.
     return mapProduct(result.rows[0]);
   },
 

@@ -919,3 +919,5 @@ RETURNING stock, version;
 - B ko latest data dobara read karke apna decision repeat karna hoga.
 
 - Important: Optimistic locking bhi internally UPDATE ke time PostgreSQL row locks use karti hai. Difference ye hai ki hum pehle se application-level read lock hold nahi kar rahe; hum version compare karke stale updates detect kar rahe hain.
+
+- Optimistic locking mein conflicts hone par request fail ho sakti hai. Agar 100 admins constantly same product update kar rahe hain, toh kaafi requests ko version conflict milega. Aisi situation mein pessimistic locking ya different workflow better ho sakta hai.

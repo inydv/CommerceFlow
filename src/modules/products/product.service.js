@@ -43,14 +43,32 @@ export const productService = {
   },
 
   // Update a product or return a 404 error
-  async updateProduct(id, updateData) {
-    const product = await productRepository.update(id, updateData);
+  // Update a product only when the client's version is current.
+  async updateProduct(id, requestData) {
+    // Separate the version from the fields we want to update.
+    // Version is used for comparison, not directly assigned.
+    const { version, ...updateData } = requestData;
 
-    if (!product) {
+    const product = await productRepository.update(id, version, updateData);
+
+    if (product) {
+      return product;
+    }
+
+    // An update returning no row could mean the product was deleted.
+    const existingProduct = await productRepository.findById(id);
+
+    if (!existingProduct) {
       throw new AppError("Product not found", 404, "PRODUCT_NOT_FOUND");
     }
 
-    return product;
+    // The product exists, but somebody changed its version.
+    // Tell the client to fetch the latest data before retrying.
+    throw new AppError(
+      "Product was modified by another request. Fetch the latest product and try again.",
+      409,
+      "PRODUCT_VERSION_CONFLICT",
+    );
   },
 
   // Delete a product or return a 404 error

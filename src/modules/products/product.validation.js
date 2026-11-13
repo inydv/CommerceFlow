@@ -15,12 +15,16 @@ export const createProductSchema = z.object({
   category: z.string().trim().min(2).max(50),
 });
 
-// Updating a product uses the same fields,
-// but every field becomes optional.
+// Updating a product requires the version that the client last read.
+// Other product fields are optional, because this is a PATCH request.
 export const updateProductSchema = createProductSchema
   .partial()
+  .extend({
+    version: z.coerce.number().int().positive(),
+  })
+  .strict()
   .refine(
-    (data) => Object.keys(data).length > 0,
+    (data) => Object.keys(data).some((key) => key !== "version"),
     "Provide at least one field to update",
   );
 
