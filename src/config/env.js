@@ -21,6 +21,24 @@ const envSchema = z.object({
   LOG_LEVEL: z
     .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
     .default("debug"),
+
+  // PostgreSQL server address
+  DB_HOST: z.string().default("localhost"),
+
+  // PostgreSQL default port
+  DB_PORT: z.coerce.number().int().positive().default(5432),
+
+  // Database name
+  DB_NAME: z.string().min(1),
+
+  // Database login username
+  DB_USER: z.string().min(1),
+
+  // Database login password
+  DB_PASSWORD: z.string().min(1),
+
+  // Maximum number of database connections the application can use
+  DB_POOL_MAX: z.coerce.number().int().positive().default(10),
 });
 
 // Validate all environment variables before starting the application

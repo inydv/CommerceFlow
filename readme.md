@@ -352,3 +352,89 @@ OpenTelemetry - Trace requests across services and locate slow operations.
 5. Service - Business rules and application logic
 6. Repository - Read or write data
 7. Response - JSON response returned to client
+
+### Create a dedicated database
+
+1. sudo -u postgres psql
+2. CREATE ROLE commerce_flow_user WITH LOGIN PASSWORD 'change_this_to_a_strong_password';
+3. CREATE DATABASE commerce_flow OWNER commerce_flow_user;
+4. \q
+
+### Verify the database connection
+
+`
+node --input-type=module -e "
+import { pool } from './src/config/database.js';
+
+try {
+const result = await pool.query('SELECT NOW() AS current_time');
+console.log('PostgreSQL connected successfully!');
+console.log(result.rows[0]);
+} finally {
+await pool.end();
+}
+"
+`
+
+### CONNECT POOL - max: 500,
+
+- This means a single Node.js application process is allowed to hold up to 500 PostgreSQL connections in its pool.
+- It does NOT immediately open all 500 connections. The pool generally creates connections as they are needed, up to its configured maximum.
+- Imagine your application receives 500 requests simultaneously, each requiring a database query.
+
+Why 500 connections can make PostgreSQL slower?
+
+`Problem	              What happens when the pool is too large
+Memory consumption	    PostgreSQL needs resources for more backend connections.
+CPU contention	        More active queries compete for CPU time.
+Context switching	      The operating system spends more time scheduling processes.
+Lock contention	        More simultaneous queries may compete for the same rows or tables.
+I/O contention	        More queries compete for disk and cache resources.
+Connection exhaustion	  Other applications and admin tools may be unable to connect.
+Latency increases	      Queries can take longer even though more connections are available.`
+
+- PostgreSQL has a max_connections setting. Its default is commonly around 100, but the actual value depends on your installation and configuration.
+- You can check yours with: SHOW max_connections;
+
+Also check how many connections are currently being used:
+
+`SELECT
+    state,
+    COUNT(*) AS connection_count
+FROM pg_stat_activity
+GROUP BY state
+ORDER BY connection_count DESC;`
+
+And inspect connection details:
+
+`SELECT
+    pid,
+    usename,
+    application_name,
+    state,
+    wait_event_type,
+    wait_event
+FROM pg_stat_activity;`
+
+How should we choose the pool size?
+
+There is no universal correct number. It depends on:
+
+1. PostgreSQL server CPU and memory.
+2. How expensive your SQL queries are.
+3. How long queries hold connections.
+4. How many application instances you run.
+5. How much database traffic you expect.
+6. Other applications sharing the database.
+
+### Execute the migration
+
+`psql -h localhost \
+  -U commerce_flow_user \
+  -d commerce_flow \
+  -f src/database/migrations/001_create_products.sql
+ `
+
+- inspect the table: psql -h localhost -U commerce_flow_user -d commerce_flow
+- table products: \d products
+- Check whether the table is empty: SELECT * FROM products;

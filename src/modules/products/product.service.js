@@ -2,21 +2,22 @@ import { AppError } from "../../errors/app-error.js";
 import { productRepository } from "./product.repository.js";
 
 export const productService = {
-  // Create a product after the request data has been validated
-  createProduct(productData) {
-    return productRepository.create(productData);
+  // Create a product and wait for PostgreSQL to save it
+  async createProduct(productData) {
+    return await productRepository.create(productData);
   },
 
   // Get products and calculate pagination information
-  getProducts({ page, limit }) {
+  async getProducts({ page, limit }) {
     const skip = (page - 1) * limit;
 
-    const products = productRepository.findAll({
-      skip,
-      limit,
-    });
-
-    const total = productRepository.count();
+    // Fetch products and their total count at the same time.
+    // These queries are independent, so we don't need to wait for one
+    // before starting the other.
+    const [products, total] = await Promise.all([
+      productRepository.findAll({ skip, limit }),
+      productRepository.count(),
+    ]);
 
     return {
       products,
@@ -29,9 +30,9 @@ export const productService = {
     };
   },
 
-  // Get one product or return a 404 error
-  getProductById(id) {
-    const product = productRepository.findById(id);
+  // Find a product or return a 404 error
+  async getProductById(id) {
+    const product = await productRepository.findById(id);
 
     if (!product) {
       throw new AppError("Product not found", 404, "PRODUCT_NOT_FOUND");
@@ -41,8 +42,8 @@ export const productService = {
   },
 
   // Update a product or return a 404 error
-  updateProduct(id, updateData) {
-    const product = productRepository.update(id, updateData);
+  async updateProduct(id, updateData) {
+    const product = await productRepository.update(id, updateData);
 
     if (!product) {
       throw new AppError("Product not found", 404, "PRODUCT_NOT_FOUND");
@@ -52,8 +53,8 @@ export const productService = {
   },
 
   // Delete a product or return a 404 error
-  deleteProduct(id) {
-    const product = productRepository.delete(id);
+  async deleteProduct(id) {
+    const product = await productRepository.delete(id);
 
     if (!product) {
       throw new AppError("Product not found", 404, "PRODUCT_NOT_FOUND");

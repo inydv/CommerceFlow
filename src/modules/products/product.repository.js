@@ -1,67 +1,166 @@
 import { randomUUID } from "node:crypto";
 
-// Temporary storage.
-// Data in this array will be lost when the server restarts.
-const products = [];
+import { pool } from "../../config/database.js";
+
+// PostgreSQL uses snake_case column names.
+// Our API uses camelCase property names.
+// This function converts database rows into API-friendly objects.
+const mapProduct = (row) => {
+  if (!row) {
+    return null;
+  }
+
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description,
+
+    // PostgreSQL NUMERIC is returned as a string by pg.
+    // Keep it as a string to avoid losing money precision.
+    price: row.price,
+
+    stock: row.stock,
+    category: row.category,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+};
 
 export const productRepository = {
-  // Save a new product in our temporary storage
-  create(productData) {
-    const product = {
-      id: randomUUID(),
-      ...productData,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+  // Insert a new product into PostgreSQL
+  async create(productData) {
+    const id = randomUUID();
+
+    const query = `
+      INSERT INTO products (
+        id,
+        name,
+        description,
+        price,
+        stock,
+        category
+      )
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING *;
+    `;
+
+    // Values are passed separately from SQL.
+    // PostgreSQL safely handles them as query parameters.
+    const values = [
+      id,
+      productData.name,
+      productData.description ?? null,
+      productData.price,
+      productData.stock,
+      productData.category,
+    ];
+
+    // Do not build SQL by directly inserting user input.
+    // const query = `SELECT * FROM products WHERE id = '${id}';`;
+    // If an attacker supplies specially crafted SQL input, directly concatenating it can create an SQL injection vulnerability.
+    const result = await pool.query(query, values);
+
+    // RETURNING gives us the newly inserted database row.
+    return mapProduct(result.rows[0]);
+  },
+
+  // Get products for a particular page
+  async findAll({ skip, limit }) {
+    const query = `
+      SELECT *
+      FROM products
+      ORDER BY created_at DESC, id DESC
+      LIMIT $1
+      OFFSET $2;
+    `;
+
+    const result = await pool.query(query, [limit, skip]);
+
+    return result.rows.map(mapProduct);
+  },
+
+  // Count all products in the database
+  async count() {
+    const query = `
+      SELECT COUNT(*) AS total
+      FROM products;
+    `;
+
+    const result = await pool.query(query);
+
+    // PostgreSQL COUNT returns BIGINT, which pg returns as a string.
+    return Number(result.rows[0].total);
+  },
+
+  // Find one product using its UUID
+  async findById(id) {
+    const query = `
+      SELECT *
+      FROM products
+      WHERE id = $1;
+    `;
+
+    const result = await pool.query(query, [id]);
+
+    return mapProduct(result.rows[0]);
+  },
+
+  // Update only the fields supplied by the client
+  async update(id, updateData) {
+    // Only these fields are allowed to become SQL column names.
+    // Never insert raw user input into SQL identifiers.
+    const allowedColumns = {
+      name: "name",
+      description: "description",
+      price: "price",
+      stock: "stock",
+      category: "category",
     };
 
-    products.push(product);
+    const values = [id];
+    const assignments = [];
 
-    return product;
-  },
+    // Build an UPDATE statement containing only supplied fields.
+    for (const [field, value] of Object.entries(updateData)) {
+      const column = allowedColumns[field];
 
-  // Return products for the requested page
-  findAll({ skip, limit }) {
-    return products.slice(skip, skip + limit);
-  },
+      // Ignore anything that is not in our allowed field list.
+      if (!column) {
+        continue;
+      }
 
-  // Count all products so the API can calculate total pages
-  count() {
-    return products.length;
-  },
+      values.push(value);
 
-  // Find one product using its ID
-  findById(id) {
-    return products.find((product) => product.id === id) || null;
-  },
-
-  // Update an existing product
-  update(id, updateData) {
-    const productIndex = products.findIndex((product) => product.id === id);
-
-    if (productIndex === -1) {
-      return null;
+      // $1 is reserved for the product ID.
+      // The next parameter number depends on the number of fields.
+      assignments.push(`${column} = $${values.length}`);
     }
 
-    // Keep existing fields and replace only the supplied fields
-    products[productIndex] = {
-      ...products[productIndex],
-      ...updateData,
-      updatedAt: new Date().toISOString(),
-    };
+    // Always update the modification timestamp.
+    assignments.push("updated_at = NOW()");
 
-    return products[productIndex];
+    const query = `
+      UPDATE products
+      SET ${assignments.join(", ")}
+      WHERE id = $1
+      RETURNING *;
+    `;
+
+    const result = await pool.query(query, values);
+
+    return mapProduct(result.rows[0]);
   },
 
-  // Remove a product and return the removed product
-  delete(id) {
-    const productIndex = products.findIndex((product) => product.id === id);
+  // Delete a product and return the deleted database row
+  async delete(id) {
+    const query = `
+      DELETE FROM products
+      WHERE id = $1
+      RETURNING *;
+    `;
 
-    if (productIndex === -1) {
-      return null;
-    }
+    const result = await pool.query(query, [id]);
 
-    const [deletedProduct] = products.splice(productIndex, 1);
-
-    return deletedProduct;
+    return mapProduct(result.rows[0]);
   },
 };

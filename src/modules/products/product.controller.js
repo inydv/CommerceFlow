@@ -1,9 +1,9 @@
 import { productService } from "./product.service.js";
 
 export const productController = {
-  // POST /api/v1/products
-  createProduct(req, res) {
-    const product = productService.createProduct(req.validated.body);
+  // Create a product
+  async createProduct(req, res) {
+    const product = await productService.createProduct(req.validated.body);
 
     res.status(201).json({
       success: true,
@@ -12,9 +12,9 @@ export const productController = {
     });
   },
 
-  // GET /api/v1/products
-  getProducts(req, res) {
-    const result = productService.getProducts(req.validated.query);
+  // Get products with pagination
+  async getProducts(req, res) {
+    const result = await productService.getProducts(req.validated.query);
 
     res.status(200).json({
       success: true,
@@ -23,9 +23,11 @@ export const productController = {
     });
   },
 
-  // GET /api/v1/products/:id
-  getProductById(req, res) {
-    const product = productService.getProductById(req.validated.params.id);
+  // Get one product
+  async getProductById(req, res) {
+    const product = await productService.getProductById(
+      req.validated.params.id,
+    );
 
     res.status(200).json({
       success: true,
@@ -33,9 +35,9 @@ export const productController = {
     });
   },
 
-  // PATCH /api/v1/products/:id
-  updateProduct(req, res) {
-    const product = productService.updateProduct(
+  // Update a product
+  async updateProduct(req, res) {
+    const product = await productService.updateProduct(
       req.validated.params.id,
       req.validated.body,
     );
@@ -47,9 +49,9 @@ export const productController = {
     });
   },
 
-  // DELETE /api/v1/products/:id
-  deleteProduct(req, res) {
-    const product = productService.deleteProduct(req.validated.params.id);
+  // Delete a product
+  async deleteProduct(req, res) {
+    const product = await productService.deleteProduct(req.validated.params.id);
 
     res.status(200).json({
       success: true,
