@@ -688,3 +688,36 @@ RETURNING stock, version;
 - 409 Conflict - Client ka requested update current state se conflict karta hai
 
 ====================================================================================================
+
+# Important PostgreSQL and API terms
+
+- Parameterized Query - $1, $2 placeholders se safe SQL values pass karna
+- SQL Injection - User input se SQL command manipulate karna
+- RETURNING - INSERT/UPDATE/DELETE se affected rows return karna
+- UUID - Unique identifier
+- NUMERIC(12,2) - Exact decimal database type, money ke liye useful
+- TIMESTAMPTZ - Timezone-aware timestamp
+- Migration - Database schema change ka versioned SQL script
+- Schema - Tables, columns, constraints ki structure
+- Foreign Key - Do tables ke records ke beech reference enforce karna
+- Check Constraint - Jaise CHECK (stock >= 0)
+- Idempotency - Same operation repeat hone se duplicate business effect na ho
+- Race Condition - Result concurrent operations ki timing/order par depend kare
+- Rollback Safety - Failure par uncommitted related changes undo ho jaana
+
+====================================================================================================
+
+# Sabse important: Kaunsi problem ka kya solution?
+
+- Database query slow hai - EXPLAIN ANALYZE, appropriate indexing
+- Page 50,000 slow hai - Keyset pagination / pagination strategy
+- Order fail hone par stock deducted reh gaya - Transaction
+- Do customers same last item purchase kar rahe hain - Atomic conditional UPDATE
+- Do alag rows ke updates combined business rule tod rahe hain - Serializable ya correct locking strategy
+- Multiple related rows ka stable snapshot chahiye - Repeatable Read
+- Do transactions ek-doosre ka lock wait kar rahi hain - Deadlock handling + consistent lock order
+- Do admins same product edit kar rahe hain - Optimistic locking
+- Pool ke saare connections busy hain - Pool metrics, queries aur connection usage inspect karo
+- Borrowed connection return nahi ho raha - Connection leak fix karo
+
+====================================================================================================
