@@ -278,3 +278,41 @@ fork()	    New Node.js process with IPC channel	            Separate Node.js scr
 - Important: exec() mein untrusted user input se shell command banana dangerous hai. Shell injection ho sakta hai. spawn() / execFile() mein shell: false aur explicit argument arrays safer default hain.
 
 ====================================================================================================
+
+# Interview aur real project ke liye simple rule
+
+Teen questions poochho:
+
+1. Kaam JavaScript CPU calculation hai? → Worker Thread.
+2. External program execute karna hai? → Child Process.
+3. Sirf DB ya API response ka wait hai? → Normal async/await.
+   Aur ek fourth question:
+
+Kaam HTTP response ke immediately pehle complete hona zaruri hai? Agar nahi, toh background job queue consider karo.
+
+- Case A — Tumne JavaScript function banaya
+- Ab is calculation ko main thread se alag chalana hai.
+- Choose: Worker Thread.
+
+```
+function calculateReport() {
+  let total = 0;
+
+  for (let i = 0; i < 1_000_000_000; i++) {
+    total += Math.sqrt(i);
+  }
+
+  return total;
+}
+```
+
+- Case B — Tum terminal mein koi command chalate ho
+- Maan lo video compress karne ke liye terminal mein ye command chalti hai:
+- ffmpeg -i input.mp4 output.mp4
+- Ab tumhe ye command apni Express API se execute karni hai.
+- Choose: Child Process.
+- Kyun? ffmpeg ek alag executable program hai. Usko start karne ke liye Child Process use hota hai.
+
+====================================================================================================
+
+====================================================================================================

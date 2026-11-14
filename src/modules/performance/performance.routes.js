@@ -16,6 +16,7 @@ import {
   clearLeakedReports,
   getLeakStats,
 } from "./memory-leak-demo.js";
+import { runReportProcess } from "./child-process.service.js";
 
 const router = Router();
 
@@ -304,6 +305,17 @@ router.get("/slow-request", async (req, res) => {
     success: true,
     message: "Slow request completed successfully",
     processId: process.pid,
+  });
+});
+
+// Development-only demonstration of a child process.
+router.get("/child-process/report", async (req, res) => {
+  const result = await runReportProcess();
+
+  res.json({
+    success: true,
+    message: "Report process finished",
+    data: result,
   });
 });
 
