@@ -105,6 +105,17 @@ Node.js mein 4 important types hote hain:
 - Duplex - Read aur write dono - TCP socket
 - Transform - Input data ko modify karke output deta hai - gzip compression
 
+- Gzip compression mein repeated data patterns ko efficiently encode kiya jaata hai.
+
+Gzip compression levels generally 0 se 9 tak hote hain.
+
+- 0 — Compression effectively disabled.
+- 1 — Faster compression, generally larger output.
+- 6 — Balanced default-style compression level.
+- 9 — More compression effort, generally more CPU work.
+
+- Original -> Gzip (Transform) -> CSV.GZ (Compressed)
+
 - Stream - Data ko progressively process karna
 - Chunk - Data ka chhota part
 - Pipe - Readable ko Writable se connect karna
@@ -115,6 +126,7 @@ Node.js mein 4 important types hote hain:
 - Drain Event - Writable ka buffer enough empty ho gaya, writes resume kar sakte hain
 - Async Generator - async function\*, jo values gradually produce karta hai
 - Memory Footprint - Kisi operation ki memory requirement
+- Precompression - File ko pehle se compress karke rakhna
 
 # Backpressure
 
@@ -128,5 +140,141 @@ Imagine karo:
 - Is problem ko handle karne ke mechanism ko Backpressure kehte hain.
 
 - Simple meaning:"Consumer slow hai, toh producer ko bhi slow hona padega."
+
+### Node.js memory kaise measure hoti hai?
+
+- process.memoryUsage();
+- Numbers bytes mein hote hain.
+
+{
+"rss": 78553088,
+"heapTotal": 12648448,
+"heapUsed": 9214720,
+"external": 6234982,
+"arrayBuffers": 5128340
+}
+
+- Memory Profiling - Application ki memory usage measure karna
+- RSS - Process ki physical memory usage ka measure
+- Heap - JavaScript objects ke liye V8-managed memory
+- heapUsed - Currently used JS heap memory
+- heapTotal - Allocated JS heap space
+- external - JS heap ke bahar associated native memory
+- arrayBuffers - ArrayBuffers aur Node.js Buffers ki memory
+- GC (Garbage Collection) - Unused objects ki memory reclaim karne ka mechanism
+
+- Buffer ka data generally V8 heap ke bahar allocate hota hai. Isliye bade CSV Buffer ko measure karte waqt sirf heapUsed dekhna misleading ho sakta hai. external, arrayBuffers aur rss bhi dekhenge
+
+====================================================================================================
+
+# Memory Leaks & Garbage Collection
+
+- JavaScript ke V8 engine mein Garbage Collector hota hai.
+- Function complete hone ke baad products array ko koi reference retain nahi kar raha. Garbage Collector future mein uski memory reclaim kar sakta hai.
+
+```
+function generateReport() {
+  const products = [
+    { name: 'Laptop' },
+    { name: 'Mobile' },
+  ];
+
+  return products.length;
+}
+
+generateReport();
+```
+
+- Ab allReports array un objects ko reference kar raha hai.
+- Isliye GC un objects ko unused nahi maan sakta.
+
+```
+const allReports = [];
+
+function generateReport() {
+  const products = [
+    { name: 'Laptop' },
+    { name: 'Mobile' },
+  ];
+
+  // Keeping a reference prevents these objects
+  // from becoming eligible for garbage collection.
+  allReports.push(products);
+}
+```
+
+### Common memory leak causes
+
+```
+Cause	            Problem	                                                    Fix
+Global arrays	    Objects indefinitely retain hote hain	                      Bounded storage, eviction
+Unbounded cache	  Cache entries continuously grow karti hain	                TTL + max-size
+Event listeners	  Duplicate listeners accumulate hote hain	                  Register once / cleanup
+Timers	          Intervals resources aur references retain kar sakte hain	  clearInterval()
+Closures	        Large objects references ke through alive reh sakte hain	  Unnecessary references release
+Pending tasks	    Queue unlimited grow karti hai	                            Backpressure, queue limits
+Buffers	          Native memory pressure	                                    Streaming, bounded buffers
+```
+
+====================================================================================================
+
+# Heap Snapshots & Memory Profiling
+
+Lekin ab questions hain:
+
+- Ye 95 MB kisne consume ki?
+- Kaunsa array itne objects hold kar raha hai?
+- Garbage Collector unhe delete kyu nahi kar raha?
+- Exact problem kis code mein hai?
+
+- Heap Snapshot in questions ke answers dhoondhne mein help karta hai.
+- Heap Snapshot ek particular moment par JavaScript heap mein reachable objects aur unke references ka snapshot hota hai.
+
+- Heap Snapshot - Memory mein reachable JS objects ka snapshot
+- Heap Profiling - Memory allocations aur retained objects investigate karna
+- Shallow Size - Object khud kitni memory occupy karta hai
+- Retained Size - Object remove hone par potentially kitni memory free ho sakti hai
+- Retainers Kaunse - references object ko alive rakhe hue hain
+- Retaining Path - Object se GC root tak reference chain
+- GC Root - Jahan se garbage collector reachability trace karta hai
+- Comparison View - Do snapshots ke object counts/sizes ka difference
+- Detached Object - Context se separate hua object jo kisi reference ki wajah se retained hai
+
+- Inspector ek debugging interface hai jisse Chrome DevTools Node.js process se connect ho sakta hai.
+
+Chrome DevTools ko Node.js se connect karo:
+
+- Chrome ke address bar mein chrome://inspect open karo.
+- Nayi DevTools window mein Memory tab select karo
+
+====================================================================================================
+
+# Graceful Shutdown
+
+- Graceful Shutdown - Running work ko safely complete karke server stop karna
+- Abrupt Shutdown - Process ko immediately stop kar dena
+- SIGINT - Interrupt signal, usually terminal mein Ctrl+C
+- SIGTERM - Process ko terminate karne ki request
+- In-flight Request - Request jo currently process ho rahi hai
+- Connection Draining - Active connections/requests ko complete hone dena
+- Resource Cleanup - DB connections, timers, workers etc. close karna
+- Shutdown Timeout - Shutdown ke liye maximum allowed time
+- Force Kill - Deadline ke baad process ko forcibly stop karna
+
+====================================================================================================
+
+# Child Processes
+
+- Child Process ek separate operating-system process hota hai, jo main Node.js process se independently execute hota hai.
+
+```
+Method	    Kya karta hai?	                                  Kab use karein?
+spawn()	    New process start, output streams mein deta hai	  Large/streaming output, long-running commands
+exec()	    Shell command run, output buffer karta hai	      Small, trusted shell commands
+execFile()	Executable directly run, output buffer karta hai	Small output, shell features unnecessary
+fork()	    New Node.js process with IPC channel	            Separate Node.js script ke saath message exchange
+```
+
+- Important: exec() mein untrusted user input se shell command banana dangerous hai. Shell injection ho sakta hai. spawn() / execFile() mein shell: false aur explicit argument arrays safer default hain.
 
 ====================================================================================================

@@ -305,22 +305,24 @@ We'll revisit the advanced topics from your list when the project makes them rel
 
 For each experiment, we'll maintain a record like this:
 
-`Metric	          Before	  After
+```
+Metric            Before	  After
 Average latency	  Measured	Measured
 p95 latency	      Measured	Measured
 p99 latency	      Measured	Measured
 Requests/second	  Measured	Measured
-CPU usage	      Measured	Measured
-Memory usage	  Measured	Measured
-DB query count	  Measured	Measured`
+CPU usage	        Measured	Measured
+Memory usage	    Measured	Measured
+DB query count	  Measured	Measured
+```
 
 We'll use the following tools:
 
-Autocannon - Generate HTTP traffic and identify slow endpoints.
-k6 - Simulate concurrent users and measure performance.
-Grafana - Visualize API latency, CPU, memory and other metrics.
-Prometheus - Collect and query application metrics.
-OpenTelemetry - Trace requests across services and locate slow operations.
+- Autocannon - Generate HTTP traffic and identify slow endpoints.
+- k6 - Simulate concurrent users and measure performance.
+- Grafana - Visualize API latency, CPU, memory and other metrics.
+- Prometheus - Collect and query application metrics.
+- OpenTelemetry - Trace requests across services and locate slow operations.
 
 ### Backend Architecture
 
@@ -341,4 +343,4 @@ Errors - Centralized error definitions
 
 For example: POST /api/v1/orders
 
-Route → Authentication middleware → Validation middleware → Controller → Order Service → Order Repository → PostgreSQL.
+- Route → Authentication middleware → Validation middleware → Controller → Order Service → Order Repository → PostgreSQL.

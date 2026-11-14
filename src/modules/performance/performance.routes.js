@@ -3,10 +3,19 @@ import { performance } from "node:perf_hooks";
 import { createReadStream } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { pipeline } from "node:stream/promises";
+import { createGzip } from "node:zlib";
+
 import {
   runHeavyCalculation,
   getWorkerPoolStats,
 } from "./performance.service.js";
+import { getMemoryStats, logMemory } from "../../utils/memory-monitor.js";
+import {
+  runLeakyReport,
+  runSafeReport,
+  clearLeakedReports,
+  getLeakStats,
+} from "./memory-leak-demo.js";
 
 const router = Router();
 
@@ -96,9 +105,25 @@ router.get("/process-info", (req, res) => {
 
 // Experiment A: Load the complete file into memory.
 router.get("/download-buffer", async (req, res) => {
+  // Take a memory snapshot before reading the file.
+  logMemory("Buffer download: BEFORE");
+
+  const start = performance.now();
+
   // readFile waits asynchronously, but creates a Buffer
   // containing the entire file.
   const file = await readFile(REPORT_FILE);
+
+  // This is the actual number of bytes in the file Buffer.
+  const fileSizeMB = Number((file.byteLength / 1024 / 1024).toFixed(2));
+
+  // Measure memory while the file Buffer is still referenced.
+  logMemory("Buffer download: AFTER READ");
+
+  console.log("[BUFFER DOWNLOAD]", {
+    fileSizeMB,
+    readDurationMs: Math.round(performance.now() - start),
+  });
 
   // Send the complete file to the client.
   res.setHeader("Content-Type", "text/csv; charset=utf-8");
@@ -116,7 +141,22 @@ router.get("/download-stream", async (req, res) => {
   // This lets our normal error handler respond if it's missing.
   const fileInfo = await stat(REPORT_FILE);
 
+  const start = performance.now();
+
+  logMemory("Stream download: BEFORE");
+
+  // Read chunks from disk.
   const source = createReadStream(REPORT_FILE);
+
+  // Sample process memory during the download.
+  // A timer is only an approximation of peak memory.
+  let peakRssMB = getMemoryStats().rssMB;
+
+  const monitor = setInterval(() => {
+    const current = getMemoryStats();
+
+    peakRssMB = Math.max(peakRssMB, current.rssMB);
+  }, 20);
 
   res.setHeader("Content-Type", "text/csv; charset=utf-8");
   res.setHeader(
@@ -143,7 +183,128 @@ router.get("/download-stream", async (req, res) => {
     if (!res.destroyed) {
       res.destroy(error);
     }
+  } finally {
+    // Always stop the memory sampling timer.
+    clearInterval(monitor);
+
+    logMemory("Stream download: AFTER");
+
+    console.log("[STREAM DOWNLOAD]", {
+      fileSizeMB: Number((fileInfo.size / 1024 / 1024).toFixed(2)),
+      sampledPeakRssMB: peakRssMB,
+      durationMs: Math.round(performance.now() - start),
+    });
   }
+});
+
+// Generate a compressed CSV archive while downloading.
+router.get("/download-gzip", async (req, res) => {
+  // Validate that the source file is available first.
+  const fileInfo = await stat(REPORT_FILE);
+
+  const start = performance.now();
+
+  // Step 1: Read the original CSV in chunks.
+  const source = createReadStream(REPORT_FILE);
+
+  // Step 2: Compress those chunks using gzip.
+  const gzip = createGzip({
+    level: 6,
+  });
+
+  // A downloadable .gz file, not automatic HTTP gzip encoding.
+  res.setHeader("Content-Type", "application/gzip");
+  res.setHeader(
+    "Content-Disposition",
+    'attachment; filename="products-report.csv.gz"',
+  );
+
+  try {
+    // CSV -> Gzip Transform -> HTTP response
+    await pipeline(source, gzip, res);
+
+    console.log("[GZIP DOWNLOAD]", {
+      originalSizeMB: Number((fileInfo.size / 1024 / 1024).toFixed(2)),
+      durationMs: Math.round(performance.now() - start),
+    });
+  } catch (error) {
+    console.error("Gzip download failed:", error);
+
+    if (!res.headersSent) {
+      throw error;
+    }
+  }
+});
+
+// See current process memory and retained report count.
+router.get("/memory/stats", (req, res) => {
+  res.json({
+    success: true,
+    data: {
+      ...getMemoryStats(),
+      ...getLeakStats(),
+    },
+  });
+});
+
+// Intentionally create unnecessary retained objects.
+router.post("/memory/leak", (req, res) => {
+  const result = runLeakyReport();
+
+  if (!result.accepted) {
+    return res.status(429).json({
+      success: false,
+      message: "Demo memory limit reached. Clear reports first.",
+      data: getLeakStats(),
+    });
+  }
+
+  res.json({
+    success: true,
+    message: "Report retained intentionally",
+    data: result,
+  });
+});
+
+// Do similar work without retaining the entire report.
+router.post("/memory/safe", (req, res) => {
+  const result = runSafeReport();
+
+  res.json({
+    success: true,
+    message: "Report processed without unnecessary retention",
+    data: result,
+  });
+});
+
+// Remove references to intentionally leaked reports.
+router.delete("/memory/clear", (req, res) => {
+  const result = clearLeakedReports();
+
+  res.json({
+    success: true,
+    message: "Retained report references cleared",
+    data: result,
+  });
+});
+
+// Simulate a slow asynchronous operation.
+// Unlike a CPU-heavy while loop, this does not block the Event Loop.
+router.get("/slow-request", async (req, res) => {
+  console.log("Slow request started");
+
+  // Simulate asynchronous work taking 10 seconds.
+  await new Promise((resolve) => {
+    setTimeout(resolve, 10_000);
+  });
+
+  console.log("Slow request completed");
+
+  res.json({
+    success: true,
+    message: "Slow request completed successfully",
+    processId: process.pid,
+  });
 });
 
 export default router;
