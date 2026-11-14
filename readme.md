@@ -921,3 +921,46 @@ RETURNING stock, version;
 - Important: Optimistic locking bhi internally UPDATE ke time PostgreSQL row locks use karti hai. Difference ye hai ki hum pehle se application-level read lock hold nahi kar rahe; hum version compare karke stale updates detect kar rahe hain.
 
 - Optimistic locking mein conflicts hone par request fail ho sakti hai. Agar 100 admins constantly same product update kar rahe hain, toh kaafi requests ko version conflict milega. Aisi situation mein pessimistic locking ya different workflow better ho sakta hai.
+
+### PostgreSQL Connection Pool Performance
+
+- pool.totalCount - Kitne connections currently pool mein exist karte hain
+- pool.idleCount - Kitne connections free hain
+- pool.waitingCount - Kitni requests connection ka wait kar rahi hain
+
+- Har query PostgreSQL mein intentionally 200 milliseconds wait karegi: SELECT pg_sleep(0.2);
+- pg_sleep() PostgreSQL ka function hai jo query ko specified duration tak pause karta hai.
+
+- DB_POOL_MAX=2 node scripts/pool-experiment.js
+
+- Agar humein poore PostgreSQL server ke connections dekhne hon, toh psql mein ye query run kar sakte hain:
+
+```
+SELECT
+    application_name,
+    state,
+    COUNT(*) AS connections
+FROM pg_stat_activity
+WHERE datname = 'commerce_flow'
+GROUP BY application_name, state
+ORDER BY connections DESC;
+```
+
+```
+SELECT
+    pid,
+    state,
+    wait_event_type,
+    wait_event,
+    query
+FROM pg_stat_activity
+WHERE datname = 'commerce_flow';
+```
+
+- Yahan wait_event_type aur wait_event se pata chal sakta hai ki PostgreSQL backend kya wait kar raha hai.
+- Lekin jo requests abhi Node.js pool ki queue mein hain, unke liye database backend connection allocate hi nahi hua hota. Isliye woh waiting requests PostgreSQL ki pg_stat_activity mein individual queries ke roop mein nahi dikhti.
+
+- connectionTimeoutMillis - Connection obtain karne ke liye kitna wait karna hai
+- query_timeout - Client-side query execution timeout
+- statement_timeout - PostgreSQL mein SQL statement kitni der tak execute ho sakta hai
+- lock_timeout - PostgreSQL lock acquire karne ke liye kitna wait kare
