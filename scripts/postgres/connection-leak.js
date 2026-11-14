@@ -1,4 +1,4 @@
-import { pool } from "../src/config/database.js";
+import { pool } from "../../src/config/database.js";
 
 // This script intentionally leaks connections.
 // Run it only in your local development environment.

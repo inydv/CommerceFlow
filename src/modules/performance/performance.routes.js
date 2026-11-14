@@ -1,11 +1,20 @@
 import { Router } from "express";
 import { performance } from "node:perf_hooks";
+import { createReadStream } from "node:fs";
+import { readFile, stat } from "node:fs/promises";
+import { pipeline } from "node:stream/promises";
 import {
   runHeavyCalculation,
   getWorkerPoolStats,
 } from "./performance.service.js";
 
 const router = Router();
+
+// Our generated dummy product report.
+const REPORT_FILE = new URL(
+  "../../../data/products-report.csv",
+  import.meta.url,
+);
 
 // This function intentionally keeps the CPU busy.
 // It is used only to understand Event Loop blocking.
@@ -83,6 +92,58 @@ router.get("/process-info", (req, res) => {
       memoryUsageMB: Math.round(process.memoryUsage().rss / 1024 / 1024),
     },
   });
+});
+
+// Experiment A: Load the complete file into memory.
+router.get("/download-buffer", async (req, res) => {
+  // readFile waits asynchronously, but creates a Buffer
+  // containing the entire file.
+  const file = await readFile(REPORT_FILE);
+
+  // Send the complete file to the client.
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader(
+    "Content-Disposition",
+    'attachment; filename="products-buffer.csv"',
+  );
+
+  res.send(file);
+});
+
+// Experiment B: Read and send the CSV in small chunks.
+router.get("/download-stream", async (req, res) => {
+  // Check the file before beginning the HTTP response.
+  // This lets our normal error handler respond if it's missing.
+  const fileInfo = await stat(REPORT_FILE);
+
+  const source = createReadStream(REPORT_FILE);
+
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader(
+    "Content-Disposition",
+    'attachment; filename="products-stream.csv"',
+  );
+  res.setHeader("Content-Length", fileInfo.size);
+
+  try {
+    // Send file chunks directly into the HTTP response.
+    // pipeline also handles backpressure automatically.
+    await pipeline(source, res);
+  } catch (error) {
+    // After streaming has started, a JSON error response
+    // may no longer be possible.
+    req.log.error({ err: error }, "CSV download failed");
+
+    if (!res.headersSent) {
+      throw error;
+    }
+
+    // If the connection is still open, close it.
+    // This prevents a client from receiving a fake successful file.
+    if (!res.destroyed) {
+      res.destroy(error);
+    }
+  }
 });
 
 export default router;

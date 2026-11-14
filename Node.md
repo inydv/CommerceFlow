@@ -95,3 +95,38 @@ router.get('/timer-delay', (req, res) => {
 - npm run start:cluster
 
 ====================================================================================================
+
+# Streams
+
+Node.js mein 4 important types hote hain:
+
+- Readable - Data read karta hai - fs.createReadStream()
+- Writable - Data write karta hai - fs.createWriteStream()
+- Duplex - Read aur write dono - TCP socket
+- Transform - Input data ko modify karke output deta hai - gzip compression
+
+- Stream - Data ko progressively process karna
+- Chunk - Data ka chhota part
+- Pipe - Readable ko Writable se connect karna
+- Pipeline - Streams ko error handling aur cleanup ke saath connect karna
+- Buffer - Temporary data storage in memory
+- Backpressure - Slow consumer ke according producer ki speed control karna
+- High Water Mark - Buffer threshold jahan backpressure signal diya ja sakta hai
+- Drain Event - Writable ka buffer enough empty ho gaya, writes resume kar sakte hain
+- Async Generator - async function\*, jo values gradually produce karta hai
+- Memory Footprint - Kisi operation ki memory requirement
+
+# Backpressure
+
+Imagine karo:
+
+- File Readable Stream bahut fast data read kar rahi hai.
+- Client ka network slow hai.
+- HTTP response utni speed se data send nahi kar pa raha.
+  Agar hum continuously data produce karte rahein, toh memory mein unsent data collect hone lagega.
+
+- Is problem ko handle karne ke mechanism ko Backpressure kehte hain.
+
+- Simple meaning:"Consumer slow hai, toh producer ko bhi slow hona padega."
+
+====================================================================================================

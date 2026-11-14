@@ -1,6 +1,6 @@
 import { performance } from "node:perf_hooks";
 
-import { pool } from "../src/config/database.js";
+import { pool } from "../../src/config/database.js";
 
 // Total number of queries we will execute together.
 const TOTAL_QUERIES = 40;
