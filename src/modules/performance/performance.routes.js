@@ -67,4 +67,22 @@ router.get("/pool-stats", (req, res) => {
   });
 });
 
+// Show which Node.js process handled this HTTP request.
+// Useful for understanding Cluster Module.
+router.get("/process-info", (req, res) => {
+  res.status(200).json({
+    success: true,
+    data: {
+      // Every operating-system process has a unique PID.
+      processId: process.pid,
+
+      // This process runs on the current machine.
+      uptimeSeconds: Math.round(process.uptime()),
+
+      // Memory usage belongs to this Node.js process.
+      memoryUsageMB: Math.round(process.memoryUsage().rss / 1024 / 1024),
+    },
+  });
+});
+
 export default router;

@@ -9,7 +9,8 @@
   },
   "scripts": {
     "dev": "nodemon src/server.js",
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "start:cluster": "node src/cluster.js"
   },
   "keywords": [],
   "author": "",

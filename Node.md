@@ -76,3 +76,22 @@ router.get('/timer-delay', (req, res) => {
 - Ek important learning: Worker Thread ka purpose heavy calculation ko hamesha faster banana nahi hai. Uska main benefit hai main Event Loop ko responsive rakhna.
 
 ====================================================================================================
+
+# Clustering
+
+- Cluster - Multiple Node.js server processes
+- Primary Process - Worker processes manage karta hai
+- Worker Process - Actual Express HTTP requests handle karta hai
+- Fork - Naya child process create karna
+- PID - Process ID
+- IPC - Inter-Process Communication, processes ke beech communication
+- Load Distribution - Requests/connections ko multiple workers mein distribute karna
+- Horizontal Scaling - More application instances add karna
+- Vertical Scaling - Same machine mein CPU/RAM resources badhana
+- Process Isolation - Har process ki separate memory
+- Crash Recovery - Failed worker ko replace karna
+- Crash Loop - Worker repeatedly crash aur restart hona
+- cluster.setupPrimary() - Worker ko kaunsi file execute karni hai
+- npm run start:cluster
+
+====================================================================================================
