@@ -1,6 +1,7 @@
 import { AppError } from "../../errors/app-error.js";
 import { productRepository } from "./product.repository.js";
 import { encodeCursor, decodeCursor } from "../../utils/cursor.js";
+import { invalidateProductCache } from "./product-cache.js";
 
 export const productService = {
   // Create a product and wait for PostgreSQL to save it
@@ -62,6 +63,8 @@ export const productService = {
       throw new AppError("Product not found", 404, "PRODUCT_NOT_FOUND");
     }
 
+    await invalidateProductCache(productId);
+
     // The product exists, but somebody changed its version.
     // Tell the client to fetch the latest data before retrying.
     throw new AppError(
@@ -78,6 +81,9 @@ export const productService = {
     if (!product) {
       throw new AppError("Product not found", 404, "PRODUCT_NOT_FOUND");
     }
+
+    // Invalidate only after successful database deletion.
+    await invalidateProductCache(id);
 
     return product;
   },

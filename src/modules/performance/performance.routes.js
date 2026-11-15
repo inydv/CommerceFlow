@@ -17,6 +17,12 @@ import {
   getLeakStats,
 } from "./memory-leak-demo.js";
 import { runReportProcess } from "./child-process.service.js";
+import {
+  getCachedProduct,
+  getCacheStampedeStats,
+  resetCacheStampedeStats,
+} from "./product-cache.service.js";
+import { redisRateLimit } from "../../middleware/redis-rate-limit.js";
 
 const router = Router();
 
@@ -316,6 +322,72 @@ router.get("/child-process/report", async (req, res) => {
     success: true,
     message: "Report process finished",
     data: result,
+  });
+});
+
+// Compare Redis cache vs PostgreSQL reads.
+// This route is enabled only in development.
+router.get("/cache/product/:id", async (req, res) => {
+  const { id } = req.params;
+
+  // Basic UUID format validation prevents invalid DB input.
+  const uuidPattern =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  if (!uuidPattern.test(id)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid product ID",
+    });
+  }
+
+  const result = await getCachedProduct(id);
+
+  if (!result.product) {
+    return res.status(404).json({
+      success: false,
+      message: "Product not found",
+    });
+  }
+
+  res.json({
+    success: true,
+    data: result.product,
+
+    // Temporary experiment metadata.
+    cache: {
+      source: result.source,
+      durationMs: result.durationMs,
+    },
+  });
+});
+
+// Inspect how many actual PostgreSQL SELECT calls occurred.
+router.get("/cache/stats", (req, res) => {
+  res.json({
+    success: true,
+    data: getCacheStampedeStats(),
+  });
+});
+
+// Reset the local SQL read counter for a new experiment.
+router.post("/cache/stats/reset", (req, res) => {
+  resetCacheStampedeStats();
+
+  res.json({
+    success: true,
+    message: "Cache experiment counter reset",
+  });
+});
+
+// Only this demo endpoint uses our rate limiter for now.
+// Other performance, product and order routes remain unchanged.
+router.get("/rate-limit/demo", redisRateLimit, (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "Request allowed by Redis rate limiter",
+    processId: process.pid,
+    timestamp: new Date().toISOString(),
   });
 });
 

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { pool } from "../../config/database.js";
 import { AppError } from "../../errors/app-error.js";
+import { invalidateProductCache } from "../products/product-cache.js";
 
 export const orderService = {
   async createOrder({ productId, quantity }) {
@@ -75,6 +76,8 @@ export const orderService = {
       // Both changes are successful.
       // Make them permanent together.
       await client.query("COMMIT");
+
+      await invalidateProductCache(productId);
 
       return orderResult.rows[0];
     } catch (error) {
