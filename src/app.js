@@ -9,6 +9,7 @@ import { logger } from "./config/logger.js";
 import { requestIdMiddleware } from "./middleware/request-id.js";
 import { notFoundMiddleware } from "./middleware/not-found.js";
 import { errorHandler } from "./middleware/error-handler.js";
+import { requestTiming } from "./middleware/request-timing.js";
 
 import apiRoutes from "./routes/index.js";
 
@@ -56,6 +57,11 @@ app.use(
     limit: "1mb",
   }),
 );
+
+// Development-only timing logs.
+if (env.NODE_ENV === "development") {
+  app.use(requestTiming);
+}
 
 // Register all API routes under version 1
 // Example: /api/v1/health

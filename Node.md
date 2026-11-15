@@ -315,4 +315,49 @@ function calculateReport() {
 
 ====================================================================================================
 
+# API Response Compression, Pagination & Performance Measurement
+
+Aaj hum teen cheezein karenge:
+
+1. Response Compression: API se bheje jaane wale JSON ka size reduce karna.
+2. Pagination Revision: Ek baar mein kitna data bhejna chahiye.
+3. Performance Measurement: API slow hai toh actual bottleneck kaise identify karna.
+
+### Response Compression
+
+- Maan lo API ka JSON response 500 KB hai.
+- Agar JSON mein repeated text hai, toh gzip usse kaafi chhota kar sakta hai.
+- Rule: Compression network bandwidth reduce karti hai, lekin server par CPU cost add karti hai.
+
+### Pagination Revision
+
+- Maan lo Products API 10 lakh products return kar rahi hai.
+
+Agar response gzip se compress bhi kar do, toh:
+
+- PostgreSQL ko huge dataset fetch karna padega.
+- Node.js ko large JSON process karna padega.
+- Client ko huge response receive aur parse karna padega.
+- Memory usage badh sakti hai.
+
+- Isliye pagination pehle, compression uske baad useful optimization ho sakti hai.
+
+### API Performance Measurement
+
+- Ab ek situation socho
+- Postman bolta hai: Response Time: 750 ms
+- Tum kaise decide karoge ki problem PostgreSQL mein hai, Redis mein, Express processing mein, ya network mein?
+- Isliye server-side timings collect karte hain.
+
+### Average, P95 aur P99 latency kya hoti hai?
+
+- Average - Sab response times ka mean
+- Median / P50 - 50% requests is duration ya usse kam
+- P95 - Approximately 95% requests is duration ya usse kam
+- P99 - Approximately 99% requests is duration ya usse kam
+- RPS - Requests Per Second
+- Error Rate - Kitne percent requests fail hui
+
+====================================================================================================
+
 ====================================================================================================

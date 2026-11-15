@@ -4,6 +4,7 @@ import { createReadStream } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { pipeline } from "node:stream/promises";
 import { createGzip } from "node:zlib";
+import compression from "compression";
 
 import {
   runHeavyCalculation,
@@ -479,6 +480,50 @@ router.post("/batch/products", async (req, res) => {
   res.json({
     success: true,
     ...result,
+  });
+});
+
+// Enable HTTP compression only for our demo route.
+//
+// For comparison, Postman can send:
+// X-No-Compression: 1
+//
+// This header is used only for our local experiment.
+router.use(
+  "/compression",
+  compression({
+    threshold: 1024,
+
+    filter(req, res) {
+      // Allow us to disable compression for comparison.
+      if (req.headers["x-no-compression"] === "1") {
+        return false;
+      }
+
+      // Use the middleware's normal content-type checks.
+      return compression.filter(req, res);
+    },
+  }),
+);
+
+// Create repeatable sample JSON data.
+// We generate it once to keep data generation cost
+// out of our response compression comparison.
+const demoProducts = Array.from({ length: 2000 }, (_, index) => ({
+  id: index + 1,
+  name: `CommerceFlow Laptop ${index + 1}`,
+  category: "Electronics",
+  description: "High performance laptop with fast storage and memory",
+  price: 50000 + (index % 100),
+  inStock: true,
+}));
+
+// Return the exact same JSON on each request.
+router.get("/compression/products", (req, res) => {
+  res.json({
+    success: true,
+    total: demoProducts.length,
+    products: demoProducts,
   });
 });
 
