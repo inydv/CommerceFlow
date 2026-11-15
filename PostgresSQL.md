@@ -891,4 +891,25 @@ Pichhle topic mein humne seekha tha:
 
 ====================================================================================================
 
+# Idempotency Keys & Safe Retries
+
+- Maan lo customer ne ₹50,000 ka laptop order kiya.
+
+Backend ne:
+
+1. PostgreSQL mein order create kar diya.
+2. Inventory reserve kar di.
+3. Transaction commit kar di.
+4. Lekin response customer tak pahunchne se pehle network disconnect ho gaya.
+
+- Customer ko timeout dikha. Usne dobara Place Order click kar diya.
+- Isi problem ko solve karne ke liye Idempotency Key use hoti hai.
+
+- Idempotency kya hoti hai?
+- Same logical request ko repeat karne par business operation ka effect dobara apply nahi hona chahiye.
+
+- Safe Retry: Network timeout ke baad same key aur same request se outcome recover karna.
+
+====================================================================================================
+
 ====================================================================================================
