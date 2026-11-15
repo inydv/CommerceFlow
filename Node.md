@@ -360,4 +360,138 @@ Agar response gzip se compress bhi kar do, toh:
 
 ====================================================================================================
 
+# Payments, Webhooks & Refunds
+
+- Customer ne payment kar di, lekin backend ko payment success ka response nahi mila. Ab order confirm karna chahiye ya nahi?
+
+### Payment Intent kya hota hai?
+
+- Payment Intent ka simple meaning hai: Customer ek particular order ke liye payment karna chahta hai.
+
+- Order created
+  ↓
+  Inventory reserved
+  ↓
+  Payment intent created
+  ↓
+  Customer attempts payment
+  ↓
+  Gateway processes transaction
+  ↓
+  Success / Failure / Pending
+
+### Webhook kya hota hai?
+
+- Webhook ek server-to-server HTTP notification hai.
+- Jab payment gateway par koi important event hota hai, gateway tumhare backend endpoint ko request bhej sakta hai.
+
+- Lekin webhooks ke saath 3 important problems aati hain:
+- Duplicate delivery - Same event do baar aa sakta hai
+- Out-of-order delivery - Later event pehle receive ho sakta hai
+- Delivery failure - Gateway ki request timeout ho sakti hai
+
+### Real webhook ki security kaise hoti hai?
+
+- Agar koi attacker khud payment.succeeded request bhej de toh?
+- Isliye production webhook endpoint ko sirf JSON receive karke payment successful mark nahi karna chahiye.
+- Real payment gateway usually request ke saath cryptographic signature bhejta hai.
+- Backend configured secret se verify karta hai ki request payload genuine hai aur alter nahi hua.
+- Critical: Signature ko original raw HTTP bytes par verify karo, JSON.stringify(req.body) par nahi.
+- Express mein raw webhook route ko JSON body-parser middleware se pehle mount karna padega, ya provider-compatible raw-body capture strategy use karni hogi.
+
+- Aur signature pass ho jaana alone enough nahi:
+- Correct gateway account aur environment verify karo.
+- Payment ID, order ID, amount aur currency cross-check karo.
+- Duplicate event IDs deduplicate karo.
+- Conflicting ya out-of-order states safely handle karo.
+- Real refund success ko gateway se verify karo.
+
+### Reconciliation kya hai?
+
+- Maan lo gateway ne payment success process kar di, lekin webhook CommerceFlow tak kabhi nahi pahunchi.
+- Reconciliation ka matlab gateway se authoritative payment status check karke apne records ko safely correct karna.
+- Real production systems mein scheduled reconciliation jobs useful hoti hain.
+
+- Payment Intent - Order ke liye payment start karne ka intention/resource
+- Payment Gateway - External payment-processing provider
+- Webhook - Server-to-server event notification
+- HMAC Signature - Secret se request authenticity/integrity verify karna
+- Raw Body - Original HTTP request bytes
+- Webhook Idempotency - Repeated event se duplicate effect prevent karna
+- Event ID - Event ka unique identifier
+- Out-of-Order Events - Events expected order se alag arrive hona
+- Refund - Successful payment ka money return karna
+- Reconciliation - External aur local payment state match karna
+- At-Least-Once Delivery - Event multiple times deliver ho sakta hai
+- Payment Attempt - Ek order ko pay karne ki particular attempt
+
+====================================================================================================
+
+# Authentication, JWT & Refresh Tokens
+
+```
+Authentication	                Authorization
+Tum kaun ho?	                  Tum kya kar sakte ho?
+Login credentials verify        karna	Permission check karna
+JWT validate karna	            Admin/customer access decide karna
+User identity establish karna	  Resource ownership enforce karna
+```
+
+### JWT kya hai?
+
+- Ye signed token hota hai jise backend verify karke user identity aur kuch claims check kar sakta hai.
+
+- JWT generally 3 parts mein hota hai:
+- Header (Algorithm).Payload (Claims).Signature(Integrity)
+
+- Example JWT payload:
+
+```
+{
+  "sub": "user-uuid",
+  "iss": "commerceflow-learning",
+  "aud": "commerceflow-api",
+  "iat": 1794740000,
+  "exp": 1794740600
+}
+```
+
+- sub - Subject — user identity
+- iss - Issuer — token kisne issue kiya
+- aud - Audience — token kis application/service ke liye hai
+- iat - Issued at
+- exp - Expiration time
+
+====================================================================================================
+
+# Authorization, RBAC & API Security
+
+- RBAC = Role-Based Access Control.
+- User ko role assign hota hai, aur role ke basis par actions allow hote hain.
+
+- Maan lo Customer A aur Customer B ka role same CUSTOMER hai. Sirf role check karne se backend decide nahi kar paayega ki order kiska hai.
+
+```
+Model	  Permission kis basis par?	  Example
+RBAC	  Role	                      Admin can view all orders
+ABAC	  Attributes/context	        Refund allowed if amount within limit and order not shipped
+ReBAC	  Relationships	              User belongs to organization that owns resource
+```
+
+- Least Privilege ka matlab user/service ko sirf utni permissions do jitni uske kaam ke liye necessary hain.
+- Maan lo Customer Support employee ko orders dekhne hain, lekin refunds approve nahi karne.
+
+- RBAC - Role-Based Access Control
+- ABAC - Attribute-Based Access Control
+- ReBAC - Relationship-Based Access Control
+- BOLA/IDOR - Kisi aur ke resource par unauthorized access
+- Privilege Escalation - Allowed permissions se zyada access gain karna
+- Mass Assignment - Client-supplied fields ko unchecked model mein save karna
+- Least Privilege - Minimum necessary permissions
+- Deny by Default - Explicit permission nahi toh access reject
+- 401 Unauthorized - Valid authentication absent
+- 403 Forbidden - Identity valid, permission insufficient
+- 404 Not Found - Resource absent ya intentionally hidden
+- Principal - Verified identity requesting access
+
 ====================================================================================================
