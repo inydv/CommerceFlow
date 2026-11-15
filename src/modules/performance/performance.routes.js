@@ -23,6 +23,11 @@ import {
   resetCacheStampedeStats,
 } from "./product-cache.service.js";
 import { redisRateLimit } from "../../middleware/redis-rate-limit.js";
+import {
+  getOrdersWithNPlusOne,
+  getOrdersWithJoin,
+  getProductsInBatch,
+} from "./query-optimization-demo.service.js";
 
 const router = Router();
 
@@ -388,6 +393,92 @@ router.get("/rate-limit/demo", redisRateLimit, (req, res) => {
     message: "Request allowed by Redis rate limiter",
     processId: process.pid,
     timestamp: new Date().toISOString(),
+  });
+});
+
+// Validate the limit for our local performance experiments.
+const getOrderLimit = (value) => {
+  const limit = Number(value ?? 10);
+
+  if (!Number.isInteger(limit) || limit < 1 || limit > 20) {
+    return null;
+  }
+
+  return limit;
+};
+
+// Intentionally inefficient endpoint.
+router.get("/n-plus-one/orders", async (req, res) => {
+  const limit = getOrderLimit(req.query.limit);
+
+  if (limit === null) {
+    return res.status(400).json({
+      success: false,
+      message: "Limit must be an integer from 1 to 20",
+    });
+  }
+
+  const result = await getOrdersWithNPlusOne(limit);
+
+  res.json({
+    success: true,
+    ...result,
+  });
+});
+
+// Optimized endpoint using JOIN.
+router.get("/join/orders", async (req, res) => {
+  const limit = getOrderLimit(req.query.limit);
+
+  if (limit === null) {
+    return res.status(400).json({
+      success: false,
+      message: "Limit must be an integer from 1 to 20",
+    });
+  }
+
+  const result = await getOrdersWithJoin(limit);
+
+  res.json({
+    success: true,
+    ...result,
+  });
+});
+
+// Development-only endpoint for experimenting with batching.
+router.post("/batch/products", async (req, res) => {
+  const { productIds } = req.body ?? {};
+
+  // Keep batch sizes small in this experiment.
+  if (
+    !Array.isArray(productIds) ||
+    productIds.length < 1 ||
+    productIds.length > 20
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: "productIds must contain 1 to 20 IDs",
+    });
+  }
+
+  // Validate all IDs before PostgreSQL receives them.
+  const uuidPattern =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  if (
+    !productIds.every((id) => typeof id === "string" && uuidPattern.test(id))
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: "Every product ID must be a valid UUID",
+    });
+  }
+
+  const result = await getProductsInBatch(productIds);
+
+  res.json({
+    success: true,
+    ...result,
   });
 });
 

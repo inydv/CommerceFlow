@@ -722,4 +722,108 @@ RETURNING stock, version;
 
 ====================================================================================================
 
+# N+1 Query Problem kya hoti hai?
+
+- Maan lo admin CommerceFlow mein 10 orders ki list dekh raha hai.
+- Har order ke saath us product ka naam bhi chahiye.
+- Ab backend pehle orders fetch karta hai: SELECT \* FROM orders LIMIT 10;
+- Phir har order ke liye separately product fetch karta hai: SELECT \* FROM products WHERE id = $1;
+
+- Yahan kya hua?
+- Orders fetch karne ke liye 1 query.
+- Har order ke product ke liye 10 queries.
+- Total 11 queries.
+
+- Isko N+1 Query Problem kehte hain.
+- Problem: Repeated database round trips, connection pool pressure aur unnecessary latency.
+
+### N+1 solve kaise karte hain?
+
+- PostgreSQL ka JOIN use karke orders aur products ek hi query mein fetch kar sakte hain.
+
+```
+SELECT
+  o.id,
+  o.quantity,
+  o.total_amount,
+  o.status,
+  p.name AS product_name,
+  p.category AS product_category
+FROM orders o
+LEFT JOIN products p
+  ON p.id = o.product_id
+LIMIT 10;
+```
+
+- N+1 Query - Ek query ke baad har record ke liye extra query
+- JOIN - Related tables ka data combine karna
+- LEFT JOIN - Left table ki rows rakhta hai, matching right-side data optional
+- Foreign Key - Related records ka database reference
+- Round Trip - Application se DB request aur response
+- Eager Loading - Related data upfront fetch karna
+- Lazy Loading - Related data jab zarurat ho tab fetch karna
+- Query Count - Ek operation mein execute hui SQL queries ki sankhya
+
+### Ek important question: Kya JOIN hamesha best hai?
+
+- Example: Agar ek order ke 10,000 related records hain aur hum bahut saare one-to-many relations JOIN kar dein, toh duplicate parent data ke saath huge result set ban sakta hai.
+- Isko Row Multiplication kehte hain.
+
+====================================================================================================
+
+# Request Batching
+
+- Maan lo frontend ko 5 specific products chahiye.
+
+- Without batching: Ye 5 HTTP requests aur generally 5 SQL queries bana sakti hain.
+
+```
+GET /products/id1
+GET /products/id2
+GET /products/id3
+GET /products/id4
+GET /products/id5
+```
+
+- Batching ke saath: Backend ek SQL query mein products fetch karega.
+
+```
+POST /performance/batch/products
+
+Body:
+{
+  "productIds": ["id1", "id2", "id3", "id4", "id5"]
+}
+```
+
+- $1 mein JavaScript array pass kar sakte hain:
+
+```
+SELECT id, name, price, stock
+FROM products
+WHERE id = ANY($1::uuid[]);
+```
+
+```
+const ids = [
+  'uuid-1',
+  'uuid-2',
+  'uuid-3',
+];
+
+await pool.query(
+  'SELECT * FROM products WHERE id = ANY($1::uuid[])',
+  [ids]
+);
+```
+
+- Batching - Multiple operations ko ek group mein process karna
+- ANY() - Array mein kisi bhi value se match check karna
+- Parameterized Query - Values ko placeholders se safely pass karna
+- Deduplication - Repeated IDs ko ek baar query karna
+- Batch Size - Ek batch mein maximum items
+- Overfetching - Zarurat se zyada data fetch karna
+
+====================================================================================================
+
 ====================================================================================================
