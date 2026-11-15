@@ -29,6 +29,17 @@ import {
   getOrdersWithJoin,
   getProductsInBatch,
 } from "./query-optimization-demo.service.js";
+import {
+  setupInventory,
+  getInventory,
+  reserveStock,
+  finishReservation,
+} from "./inventory-demo.service.js";
+import {
+  createLifecycleOrder,
+  getLifecycleOrder,
+  transitionLifecycleOrder,
+} from "./order-lifecycle.service.js";
 
 const router = Router();
 
@@ -524,6 +535,213 @@ router.get("/compression/products", (req, res) => {
     success: true,
     total: demoProducts.length,
     products: demoProducts,
+  });
+});
+
+// Validate product IDs passed from Postman.
+const isUUID = (value) =>
+  typeof value === "string" &&
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+
+// Set up isolated inventory data for the experiment.
+router.post("/inventory-demo/setup", async (req, res) => {
+  const { productId, quantity } = req.body ?? {};
+
+  if (
+    !isUUID(productId) ||
+    !Number.isInteger(quantity) ||
+    quantity < 0 ||
+    quantity > 1000
+  ) {
+    return res.status(400).json({
+      message: "Valid productId and quantity 0-1000 required",
+    });
+  }
+
+  const result = await setupInventory(productId, quantity);
+
+  if (!result) {
+    return res.status(409).json({
+      message: "Demo inventory already exists for this product",
+    });
+  }
+
+  res.status(201).json({ success: true, data: result });
+});
+
+// Check physical, reserved and available stock.
+router.get("/inventory-demo/:productId", async (req, res) => {
+  if (!isUUID(req.params.productId)) {
+    return res.status(400).json({ message: "Invalid productId" });
+  }
+
+  const result = await getInventory(req.params.productId);
+
+  if (!result) {
+    return res.status(404).json({ message: "Inventory not found" });
+  }
+
+  res.json({ success: true, data: result });
+});
+
+// Hold stock for a checkout.
+router.post("/inventory-demo/reserve", async (req, res) => {
+  const { productId, quantity } = req.body ?? {};
+
+  if (
+    !isUUID(productId) ||
+    !Number.isInteger(quantity) ||
+    quantity < 1 ||
+    quantity > 100
+  ) {
+    return res.status(400).json({
+      message: "Valid productId and quantity 1-100 required",
+    });
+  }
+
+  const reservation = await reserveStock(productId, quantity);
+
+  if (!reservation) {
+    return res.status(409).json({
+      success: false,
+      message: "Insufficient available stock or inventory not found",
+    });
+  }
+
+  res.status(201).json({
+    success: true,
+    data: reservation,
+  });
+});
+
+// Simulate successful payment.
+router.post("/inventory-demo/:reservationId/confirm", async (req, res) => {
+  if (!isUUID(req.params.reservationId)) {
+    return res.status(400).json({ message: "Invalid reservationId" });
+  }
+
+  const result = await finishReservation(req.params.reservationId, "CONFIRMED");
+
+  const status =
+    result.outcome === "NOT_FOUND"
+      ? 404
+      : result.outcome === "SUCCESS"
+        ? 200
+        : 409;
+
+  res.status(status).json({ data: result });
+});
+
+// Simulate failed payment or cancelled checkout.
+router.post("/inventory-demo/:reservationId/release", async (req, res) => {
+  if (!isUUID(req.params.reservationId)) {
+    return res.status(400).json({ message: "Invalid reservationId" });
+  }
+
+  const result = await finishReservation(req.params.reservationId, "RELEASED");
+
+  const status =
+    result.outcome === "NOT_FOUND"
+      ? 404
+      : result.outcome === "SUCCESS"
+        ? 200
+        : 409;
+
+  res.status(status).json({ data: result });
+});
+
+const isValidUUID = (value) =>
+  typeof value === "string" &&
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+
+// Create an order and reserve its inventory.
+router.post("/order-demo", async (req, res) => {
+  const { productId, quantity } = req.body ?? {};
+
+  if (
+    !isValidUUID(productId) ||
+    !Number.isInteger(quantity) ||
+    quantity < 1 ||
+    quantity > 100
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: "Valid productId and quantity 1-100 required",
+    });
+  }
+
+  const result = await createLifecycleOrder(productId, quantity);
+
+  if (result.outcome !== "SUCCESS") {
+    return res.status(409).json({
+      success: false,
+      message: "Insufficient available inventory",
+    });
+  }
+
+  res.status(201).json({
+    success: true,
+    data: result.order,
+  });
+});
+
+// Check the order's current status.
+router.get("/order-demo/:orderId", async (req, res) => {
+  if (!isValidUUID(req.params.orderId)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid order ID",
+    });
+  }
+
+  const order = await getLifecycleOrder(req.params.orderId);
+
+  if (!order) {
+    return res.status(404).json({
+      success: false,
+      message: "Order not found",
+    });
+  }
+
+  res.json({
+    success: true,
+    data: order,
+  });
+});
+
+// Request an order state transition.
+router.patch("/order-demo/:orderId/status", async (req, res) => {
+  const { status } = req.body ?? {};
+
+  const allowedStatuses = ["CONFIRMED", "SHIPPED", "DELIVERED", "CANCELLED"];
+
+  if (!isValidUUID(req.params.orderId) || !allowedStatuses.includes(status)) {
+    return res.status(400).json({
+      success: false,
+      message: "Valid order ID and target status required",
+    });
+  }
+
+  const result = await transitionLifecycleOrder(req.params.orderId, status);
+
+  if (result.outcome === "NOT_FOUND") {
+    return res.status(404).json({
+      success: false,
+      message: "Order not found",
+    });
+  }
+
+  if (result.outcome === "INVALID_TRANSITION") {
+    return res.status(409).json({
+      success: false,
+      code: "INVALID_ORDER_TRANSITION",
+      message: `Cannot move from ${result.currentStatus} to ${status}`,
+    });
+  }
+
+  res.json({
+    success: true,
+    data: result.order,
   });
 });
 

@@ -826,4 +826,69 @@ await pool.query(
 
 ====================================================================================================
 
+# Inventory Reservation vs Stock Deduction
+
+- Maan lo CommerceFlow mein ek iPhone ka sirf 1 piece bacha hai.
+- Customer A checkout start karta hai.
+- Customer B bhi checkout start karta hai.
+- Dono payment page par chale jaate hain.
+- Agar hum stock sirf successful payment ke baad deduct karte hain, toh dono ko stock available dikh sakta hai.
+
+- Yahan hum Inventory Reservation use kar sakte hain.
+- Reservation ka matlab: Product ko temporarily kisi checkout ke liye hold karna, taaki woh stock doosre customer ko available na dikhe.
+- Lekin reservation permanent stock deduction nahi hai.
+
+- On-hand stock - Total physical inventory
+- Reserved stock - Temporarily held stock
+- Available stock - New customers ke liye available inventory
+- Overselling - Available quantity se zyada units sell kar dena
+- Reservation - Checkout ke liye temporary stock hold
+- Release - Failed/cancelled checkout ka held stock wapas available karna
+- Commit/Consume - Successful order par reserved units permanently deduct karna
+
+- Important difference: Reserve karte waqt physical stock decrease nahi kar rahe. Sirf available quantity decrease kar rahe hain.
+
+- Inventory Reservation - Stock temporarily hold karna
+- Available-to-Promise (ATP) - Customers ko realistically promise karne layak stock
+- Overselling - Available units se zyada sell kar dena
+- Reservation Expiry - Temporary hold ki validity end hona
+- Stock Release - Held inventory wapas available karna
+- Stock Consumption - Successful order par stock permanently deduct karna
+- State Machine - Allowed status transitions define karna
+- Terminal State - Final status jahan se normal transition nahi honi chahiye
+- Atomic Update - Single SQL operation ke andar safe conditional change
+- Row Lock - Concurrent row updates coordinate karna
+- Inventory Ledger - Stock movements ka auditable history
+- Reconciliation - Inventory records ko actual business events se verify/correct karna
+
+====================================================================================================
+
+# Order Lifecycle & State Machine
+
+Pichhle topic mein humne seekha tha:
+
+- Customer checkout start kare toh stock reserve hota hai.
+- Payment fail ho toh stock release hota hai.
+- Payment successful ho toh stock consume hota hai.
+
+- Ab question hai: Order place hone ke baad uski journey kaise manage karenge?
+
+- Maan lo customer ne laptop order kiya. Order payment pending se confirmed, phir shipped aur delivered hoga.
+- Lekin agar koi directly PENDING_PAYMENT se DELIVERED kar de toh?
+- Ye logically galat hai. Isi problem ko State Machine solve karti hai.
+
+- Har status change ko State Transition kehte hain.
+
+- State Machine ka matlab hai: System clearly define karega ki kaunsi state se kaunsi state mein jaana allowed hai.
+
+### Allowed vs Invalid Transitions
+
+- PENDING_PAYMENT → CONFIRMED Valid
+- CONFIRMED → SHIPPED Valid
+- PENDING_PAYMENT → DELIVERED Invalid
+- CANCELLED → SHIPPED Invalid
+- DELIVERED → CANCELLED Invalid in our simple policy
+
+====================================================================================================
+
 ====================================================================================================
