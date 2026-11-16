@@ -495,3 +495,252 @@ ReBAC	  Relationships	              User belongs to organization that owns resou
 - Principal - Verified identity requesting access
 
 ====================================================================================================
+
+# Monitoring, Metrics & Observability
+
+- Maan lo CommerceFlow live hai. Customer complaint karta hai: "Order place karne mein 8 seconds lag rahe hain."
+
+- Ab tumhare paas 3 questions hain:
+
+1. Problem kab start hui?
+2. Kitne customers affected hain?
+3. Slow kya hai—Node.js, PostgreSQL, Redis ya payment gateway?
+
+- Yahin Observability ka role aata hai.
+- Monitoring: System healthy hai ya nahi, ye dekhna.
+- Observability: System unhealthy hai toh kyun, ye investigate karna.
+
+- Monitoring bolti hai: Orders API response time increased to 3 seconds.
+- Observability help karti hai:
+
+```
+Orders API = 3 seconds
+  PostgreSQL query = 2.7 seconds
+  Application logic = 0.2 seconds
+  Other processing = 0.1 seconds
+```
+
+### Observability ke 3 pillars
+
+1. Logs - Kya hua?
+
+```
+Logs se particular incident investigate karte hain.
+
+{
+  "level": "error",
+  "requestId": "req-123",
+  "message": "Database query timed out",
+  "durationMs": 3012
+}
+```
+
+2. Metrics - Kitna / kitni baar?
+
+```
+Metrics se trends aur alerts identify karte hain.
+
+Total requests: 10000
+Failed requests: 120
+Average response time: 180ms
+P95 response time: 850ms
+```
+
+3. Traces - Time kahan laga?
+
+```
+Trace ek request ke multiple operations ka timing relationship dikhati hai.
+
+POST /orders       950ms
+  Auth check        15ms
+  Product query    120ms
+  Inventory update 700ms
+  Response          15ms
+  Other work       100ms
+```
+
+- Actual distributed tracing ke liye OpenTelemetry jaisa standard use kar sakte hain.
+
+### P50, P95 aur P99 kya hote hain?
+
+- Maan lo 100 customers ki API request timing measure ki.
+
+```
+Metric	Simple meaning
+P50	    Approximately 50% requests isse fast/equal
+P95	    Approximately 95% requests isse fast/equal
+P99	    Approximately 99% requests isse fast/equal
+```
+
+- Maan lo average API response time 200ms hai, lekin P99 = 5 seconds.
+- Matlab kuch customers ko bahut slow experience ho raha hai, jo average alone se clearly visible nahi hoga.
+- Production APIs mein P95/P99 monitor karna useful hai.
+
+### Practical: CommerceFlow mein Request ID + Metrics
+
+Implement karenge:
+
+- Request ID
+- Request duration logging
+- Prometheus metrics
+- Liveness aur readiness health checks
+- Slow API simulation
+
+- prom-client Node.js applications ke liye counters, gauges, histograms aur default process metrics expose kar sakta hai.
+
+### Request ID kyu?
+
+- Customer complaint kare: Tum logs mein abc-123 search karke relevant request find kar sakte ho.
+- Important: Hum abhi server-generated Request ID use kar rahe hain. Client-supplied arbitrary ID par blindly trust nahi karenge.
+
+### Prometheus Metrics implement karo
+
+- Counter vs Histogram?
+- Counter sirf increase hota hai. - GET /products called 100 times.
+- Histogram observations ki distribution record karta hai.
+
+```
+40 requests under 50ms
+35 requests under 100ms
+20 requests under 500ms
+5 requests above 500ms
+```
+
+- Prometheus histograms request latency distributions aur percentile calculations ke liye useful hain.
+
+### Health Checks: Liveness vs Readiness
+
+- Ab maan lo Node.js process running hai, lekin PostgreSQL down hai.
+- Kya application healthy hai?
+- Partially.
+
+- Node.js server alive hai, lekin database-dependent APIs serve nahi kar paayega.
+- Isliye do alag health checks useful hain.
+
+- Liveness - Process alive hai?
+- Readiness - Process required dependencies ke saath traffic serve kar sakta hai?
+
+### Real production debugging example
+
+```
+Observation	                          Possible cause
+API P95 suddenly 4 seconds	          Slow downstream operation
+PostgreSQL pool waiting clients high	Connection exhaustion
+Event loop delay high	                Node.js blocking work
+Redis timeout errors increasing	      Cache dependency issue
+BullMQ waiting jobs increasing	      Workers slow/down
+Memory continuously increasing	      Potential memory leak
+Failed payments increasing	          Payment provider or application issue
+```
+
+- Ye signals cause ka proof nahi hote, lekin investigation ko right direction dete hain.
+
+### Alerts kab lagane chahiye?
+
+- Har error par notification bhejna useful nahi.
+
+```
+Metric	                    Example alert condition
+API 5xx error ratio	        5 minutes tak unusually high
+API P95 latency	            Normal baseline se significantly high
+PostgreSQL waiting clients	Continuously elevated
+BullMQ queue age	          Oldest waiting job too old
+Worker failures	            Repeated terminal failures
+Memory utilization	        Sustained growth/high usage
+```
+
+- Production thresholds actual traffic, SLO aur baseline ke according configure karenge.
+- Monitoring: Dashboard mein problem visible hai.
+- Alerting: Problem serious hone par responsible person ko notify kiya jaata hai.
+
+- Logs - Individual events ka record
+- Metrics - Numerical measurements over time
+- Tracing - Request ke steps aur timings
+- Request ID - Request identify/correlate karne ka identifier
+- Counter - Increasing count
+- Gauge - Current value, jaise active connections
+- Histogram - Latency distribution
+- P95/P99 - Tail latency percentiles
+- Liveness - Process responsive
+- Readiness - Required work serve karne ke liye ready
+- SLO - Service reliability/performance target
+- Alert - Important threshold breach par notification
+- High Cardinality - Excessively many unique metric label combinations
+
+====================================================================================================
+
+# Timeouts, Circuit Breaker & Resilience
+
+- Agar koi external service slow ya down ho jaaye, toh apni Node.js API ko kaise protect karte hain.
+
+- Timeout - Service zyada time le toh wait karna band karo
+- Retry - Temporary error par operation dobara try karo
+- Circuit Breaker - Service repeatedly fail ho rahi ho toh kuch time usse call hi mat karo
+
+### Circuit Breaker ke 3 states
+
+1. CLOSED — Normal state - External service ko requests jaati hain. Failure threshold cross hone par circuit OPEN hota hai.
+
+- Repeated failures
+
+2. OPEN — Protection state - External service ko call nahi karte. Immediately fallback/error return karte hain.
+
+- Cooldown completed
+
+3. HALF_OPEN — Recovery check - Limited trial request allow karte hain. Successful ho toh CLOSED, fail ho toh wapas OPEN.
+
+### Fallback kya hota hai?
+
+- Maan lo customer order details open karta hai.
+- Shipping service down hai.
+- Kya complete order page fail karna chahiye?
+- Zaruri nahi.
+- Hum aisa response de sakte hain:
+
+```
+{
+  "orderId": "ORDER-123",
+  "orderStatus": "CONFIRMED",
+  "shipping": {
+    "status": "UNKNOWN",
+    "message": "Shipping updates temporarily unavailable"
+  }
+}
+```
+
+- Customer ko order details mil jaayengi, bas shipping information temporarily unavailable hai.
+- Isko Graceful Degradation kehte hain.
+
+### Timeout aur Retry ek saath use karne ka danger
+
+Maan lo:
+
+- Ek request ka timeout: 3 seconds
+- Maximum attempts: 3
+- Retries ke beech backoff bhi hai
+
+- Agar teeno attempts timeout hoti hain, toh total operation 9 seconds se zyada chal sakta hai.
+- Customer-facing API ke liye ye unacceptable ho sakta hai.
+- Isliye production mein overall time budget bhi define karna chahiye.
+
+### Retry aur Circuit Breaker mein difference
+
+- Retry bolta hai: Ek baar aur try karte hain.
+- Circuit Breaker bolta hai: Service repeatedly fail ho rahi hai. Ab kuch time try hi nahi karenge.
+
+- Timeout - Maximum wait duration
+- Retry - Failed request dobara attempt
+- Exponential Backoff - Retry delays gradually increase
+- Jitter - Retry delays mein randomness
+- Circuit Breaker - Failing dependency ko temporarily stop calling
+- CLOSED - Normal requests allowed
+- OPEN - Provider requests blocked
+- HALF_OPEN - Limited recovery probe
+- Fallback - Primary operation unavailable ho toh safe alternative
+- Graceful Degradation - Partial functionality continue
+- Bulkhead - Resources isolate karke failures spread hone se rokna
+- Resilience - Dependency failures ke bawajood service ko safely operate karna
+
+====================================================================================================
+
+====================================================================================================

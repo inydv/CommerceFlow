@@ -1,4 +1,6 @@
-### Phase 0 — Project foundation
+====================================================================================================
+
+# Phase 0 — Project foundation
 
 - Node.js project initialization
 - Express server
@@ -21,7 +23,9 @@ Problem we'll create: Poorly structured code, duplicated logic, inconsistent err
 
 Solution: Production-grade modular architecture and centralized infrastructure.
 
-### Phase 1 — Node.js internals and performance
+====================================================================================================
+
+# Phase 1 — Node.js internals and performance
 
 - Event Loop
 - Blocking vs non-blocking operations
@@ -60,7 +64,9 @@ How we'll investigate:
 
 Important distinction: Worker Threads are for CPU-intensive JavaScript work. Child Processes let us execute separate programs or scripts. Cluster runs multiple Node.js processes. We'll demonstrate all three separately.
 
-### Phase 2 — API performance and scalability
+====================================================================================================
+
+# Phase 2 — API performance and scalability
 
 - Rate Limiting
 - Redis
@@ -94,7 +100,9 @@ How we'll investigate:
 - Database connection counts
 - Before/after load tests
 
-### Phase 3 — Database engineering
+====================================================================================================
+
+# Phase 3 — Database engineering
 
 We'll begin with PostgreSQL.
 
@@ -136,7 +144,9 @@ Problems we'll create:
 
 We'll compare PostgreSQL and MongoDB where appropriate, not assume one is always better.
 
-### Phase 4 — Background processing
+====================================================================================================
+
+# Phase 4 — Background processing
 
 - Message Queues
 - BullMQ
@@ -161,7 +171,9 @@ When a user creates an order, the API should not wait for:
 
 Then we'll intentionally make jobs fail and understand retries, duplicate execution and failed-job recovery.
 
-### Phase 5 — Backend reliability and distributed systems
+====================================================================================================
+
+# Phase 5 — Backend reliability and distributed systems
 
 - Timeouts
 - Circuit Breakers
@@ -186,7 +198,9 @@ Real problems:
 
 We'll learn why distributed systems need more than database transactions.
 
-### Phase 6 — Microservices
+====================================================================================================
+
+# Phase 6 — Microservices
 
 After modular monolith
 We'll extract services from our existing application.
@@ -215,7 +229,9 @@ We'll introduce:
 
 We'll compare the modular monolith against microservices and understand their operational costs.
 
-### Phase 7 — Backend security
+====================================================================================================
+
+# Phase 7 — Backend security
 
 - JWT
 - Refresh Token Rotation
@@ -235,7 +251,9 @@ We'll compare the modular monolith against microservices and understand their op
 
 We'll test vulnerabilities in our own local development application and fix them.
 
-### Phase 8 — Backend communication
+====================================================================================================
+
+# Phase 8 — Backend communication
 
 We'll intentionally defer these until the core backend is working:
 
@@ -246,7 +264,9 @@ We'll intentionally defer these until the core backend is working:
 - gRPC
 - API Gateway
 
-### Phase 9 — Monitoring and observability
+====================================================================================================
+
+# Phase 9 — Monitoring and observability
 
 This will run throughout the project, but we'll build a complete monitoring setup here.
 
@@ -266,7 +286,9 @@ This will run throughout the project, but we'll build a complete monitoring setu
 
 Our goal: When an API becomes slow, we should be able to determine whether the bottleneck is Node.js, PostgreSQL, MongoDB, Redis, a queue, or another service.
 
-### Phase 10 — Production deployment
+====================================================================================================
+
+# Phase 10 — Production deployment
 
 Only after we understand the application:
 
@@ -282,7 +304,9 @@ Only after we understand the application:
 - Deployment rollback
 - Horizontal scaling
 
-### Phase 11 — Advanced topics
+====================================================================================================
+
+# Phase 11 — Advanced topics
 
 We'll revisit the advanced topics from your list when the project makes them relevant:
 
@@ -301,7 +325,9 @@ We'll revisit the advanced topics from your list when the project makes them rel
 - Consistent Hashing
 - Lock-free Algorithms
 
-### How we'll identify bottlenecks
+====================================================================================================
+
+# How we'll identify bottlenecks
 
 For each experiment, we'll maintain a record like this:
 
@@ -324,7 +350,9 @@ We'll use the following tools:
 - Prometheus - Collect and query application metrics.
 - OpenTelemetry - Trace requests across services and locate slow operations.
 
-### Backend Architecture
+====================================================================================================
+
+# Backend Architecture
 
 We will maintain clear responsibilities:
 
@@ -344,3 +372,7 @@ Errors - Centralized error definitions
 For example: POST /api/v1/orders
 
 - Route → Authentication middleware → Validation middleware → Controller → Order Service → Order Repository → PostgreSQL.
+
+====================================================================================================
+
+====================================================================================================
