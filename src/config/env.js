@@ -27,6 +27,19 @@ const envSchema = z.object({
   // WHY: Missing DB config ko startup par catch karna hai.
   // WITHOUT THIS: Connection ke waqt confusing errors mil sakti hain.
   DATABASE_URL: z.string().min(1),
+
+  // JWT signing secret.
+  // WHY: JWT ka signature verify karke token tampering detect hoti hai.
+  // WITHOUT STRONG SECRET: Attacker forged tokens create kar sakta hai.
+  //
+  // Is project mein 32 random bytes ko 64 hexadecimal characters
+  // ke form mein environment variable mein store kar rahe hain.
+  JWT_ACCESS_SECRET: z
+    .string()
+    .regex(
+      /^[0-9a-fA-F]{64}$/,
+      "JWT_ACCESS_SECRET must be 64 hexadecimal characters",
+    ),
 });
 
 // safeParse exception throw karne ke bajaye result return karta hai.

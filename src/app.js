@@ -7,6 +7,8 @@ import { AppError } from "./common/errors/app-error.js";
 import { errorHandler } from "./common/middleware/error-handler.js";
 import { checkDatabase } from "./config/database.js";
 
+import apiRoutes from "./routes/index.js";
+
 // Express app create hoti hai.
 // Yahan HTTP listener start nahi karte.
 // WHY: Routing configuration aur server lifecycle separate rahe.
@@ -112,6 +114,10 @@ app.get("/api/v1", (req, res) => {
     version: "v1",
   });
 });
+
+// Auth routes:
+// /api/v1/auth/register, /login, /refresh, /logout, /me
+app.use("/api/v1", apiRoutes);
 
 // Unknown route par uniform application error.
 // WITHOUT THIS: Default HTML 404 response API clients ke
