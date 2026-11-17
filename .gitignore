@@ -1,0 +1,23 @@
+# Installed dependencies can be restored using npm ci.
+# Inhe commit karne se repository unnecessarily large hogi.
+node_modules/
+
+# Actual credentials kabhi GitHub par push nahi karne.
+.env
+.env.*
+!.env.example
+
+# Logs may contain sensitive debugging information.
+logs/
+*.log
+
+# Heap snapshots mein runtime data ho sakta hai.
+*.heapsnapshot
+
+# Local benchmark outputs.
+artifacts/local/
+
+# Editor and OS generated files.
+.vscode/
+.idea/
+.DS_Store
