@@ -1,0 +1,169 @@
+
+services:
+  # ====================================================
+  # POSTGRESQL
+  # ====================================================
+  postgres:
+    image: postgres:17-bookworm
+
+    # Database credentials come from .env.docker.
+    # NEVER hardcode actual secrets in compose.yaml.
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+      POSTGRES_DB: ${POSTGRES_DB:?required}
+
+    # Data persists across container recreation.
+    # WITHOUT VOLUME: Container removal can lose database data.
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    # Only internal Docker networking, no host DB port exposed.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+    restart: unless-stopped
+
+  # ====================================================
+  # REDIS
+  # ====================================================
+  redis:
+    image: redis:7-bookworm
+
+    # AOF persists Redis state to disk for local development.
+    # Redis queues still require operational monitoring.
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+
+    volumes:
+      - redis_data:/data
+
+    healthcheck:
+      test:
+        - CMD
+        - redis-cli
+        - ping
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+    restart: unless-stopped
+
+  # ====================================================
+  # DATABASE MIGRATIONS
+  # ====================================================
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    env_file:
+      - .env.docker
+
+    # Do not start migration before DB is ready.
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    # One-off database migration command.
+    #
+    # WHY: Application should not start against missing tables.
+    command:
+      - node
+      - scripts/database/migrate.js
+
+    restart: "no"
+
+  # ====================================================
+  # EXPRESS API
+  # ====================================================
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    env_file:
+      - .env.docker
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+    # Bind only to the local host by default.
+    #
+    # WHY: This Compose configuration is for local learning,
+    # not publicly exposed internet production.
+    ports:
+      - "127.0.0.1:5000:5000"
+
+    command:
+      - node
+      - src/server.js
+
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:5000/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+
+    restart: unless-stopped
+
+    # Prevent uncontrolled container log file growth.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ====================================================
+  # BULLMQ BACKGROUND WORKER
+  # ====================================================
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    env_file:
+      - .env.docker
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+    # Worker doesn't need a public HTTP port.
+    command:
+      - node
+      - src/jobs/worker.js
+
+    restart: unless-stopped
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# Named persistent volumes.
+volumes:
+  postgres_data:
+  redis_data:

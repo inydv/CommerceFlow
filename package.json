@@ -20,7 +20,8 @@
     "lab:cluster": "node scripts/labs/03-cluster.js",
     "lab:memory": "node --expose-gc scripts/labs/04-memory.js",
     "lab:child": "node scripts/labs/05-child-process.js",
-    "lab:circuit": "node scripts/labs/06-circuit-breaker.js"
+    "lab:circuit": "node scripts/labs/06-circuit-breaker.js",
+    "db:check": "node scripts/operations/check-integrity.js"
   },
   "dependencies": {
     "argon2": "^0.45.2",

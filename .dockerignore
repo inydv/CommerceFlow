@@ -1,0 +1,25 @@
+
+# Never copy local secrets into Docker build context.
+.env
+.env.*
+!.env.example
+!.env.docker.example
+
+# Dependencies are installed inside image using npm ci.
+node_modules/
+
+# Ignore Git history and machine-specific artifacts.
+.git/
+logs/
+*.log
+*.heapsnapshot
+*.heapprofile
+
+# Benchmark outputs and local files.
+artifacts/
+coverage/
+
+# Editor configuration.
+.vscode/
+.idea/
+.DS_Store

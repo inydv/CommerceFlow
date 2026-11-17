@@ -82,3 +82,30 @@ node --heap-prof \
  scripts/labs/04-memory.js retained
 
 ======================================================================================================
+
+# Docker Compose — Complete application
+
+Start everything: docker compose --env-file .env.docker up --build -d
+Check containers: docker compose --env-file .env.docker ps
+Application logs: docker compose --env-file .env.docker logs --tail=50 api
+Worker logs: docker compose --env-file .env.docker logs --tail=50 worker
+Migration logs: docker compose --env-file .env.docker logs migrate
+
+- Run integrity inspection inside container:
+  docker compose --env-file .env.docker exec api \
+   node scripts/operations/check-integrity.js
+
+- Access PostgreSQL:
+  docker compose --env-file .env.docker exec postgres \
+   psql -U commerceflow_user -d commerceflow_db
+
+- Access Redis:
+  docker compose --env-file .env.docker exec redis \
+   redis-cli ping
+
+- Docker simulator command:
+  docker compose --env-file .env.docker exec api \
+   node scripts/development/send-payment-webhook.js \
+   payment.succeeded YOUR_PAYMENT_INTENT_UUID
+
+======================================================================================================

@@ -290,15 +290,23 @@ export async function processWebhook(event) {
     }
 
     if (event.type === "payment.succeeded") {
-      // A local simulator cannot prove that money moved.
-      // This transition is accepted ONLY from signed dev events.
+      // Payment confirmation arrived after the local deadline.
       //
-      // Real provider integration must verify payment amount,
-      // currency, merchant ownership and gateway reference.
+      // WHY: Expired orders may have already released their stock.
+      // We cannot simply mark such an order "paid" and consume
+      // reservation because its inventory may now belong to
+      // another customer's order.
+      //
+      // IMPORTANT: A REAL gateway may have already captured money.
+      // In that case the event must go through a durable
+      // reconciliation/refund workflow. Rejecting the local
+      // simulator event is NOT equivalent to refunding payment.
       if (!order.within_deadline) {
-        // Do not fulfill a locally expired reservation.
-        // See late-payment reconciliation limitation below.
-        return { duplicate: false, applied: false };
+        throw new AppError(
+          "Payment arrived after order deadline; reconciliation required",
+          409,
+          "PAYMENT_RECONCILIATION_REQUIRED",
+        );
       }
 
       await consumeReservation(client, orderId);

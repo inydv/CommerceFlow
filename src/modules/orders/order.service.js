@@ -371,6 +371,25 @@ export async function cancelOrder(userId, orderId) {
       [orderId],
     );
 
+    // The order has been cancelled and stock reservation released.
+    //
+    // WHY: Payment intent and order state must agree.
+    // WITHOUT THIS: The order might be "cancelled" while its
+    // local payment intent remains "pending" indefinitely.
+    //
+    // IMPORTANT: This changes ONLY our local database record.
+    // It does NOT cancel an external gateway payment attempt.
+    // Real gateways require a provider-side cancellation call
+    // and later reconciliation.
+    await client.query(
+      `UPDATE payments
+       SET status = 'expired',
+          updated_at = NOW()
+       WHERE order_id = $1
+          AND status = 'pending'`,
+      [orderId],
+    );
+
     // All reservation releases + order state change
     // commit atomically.
     return readOrder(client, orderId, userId);
