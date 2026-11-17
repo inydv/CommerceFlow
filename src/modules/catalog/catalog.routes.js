@@ -1,5 +1,7 @@
 import { Router } from "express";
 
+import { catalogReadLimiter } from "../../common/rate-limit/limiter.js";
+
 import { requireAuth, requireRole } from "../auth/auth.middleware.js";
 
 import * as service from "./catalog.service.js";
@@ -13,6 +15,8 @@ import {
   productUpdateSchema,
   productListSchema,
 } from "./catalog.schema.js";
+
+import { scrollProductSchema } from "./catalog.schema.js";
 
 const router = Router();
 
@@ -85,20 +89,20 @@ router.get("/admin/products/:id", ...admin, async (req, res) => {
 // PUBLIC READ ENDPOINTS
 // =====================================================
 
-router.get("/categories", async (req, res) => {
+router.get("/categories", catalogReadLimiter, async (req, res) => {
   const data = await service.getCategories();
 
   return res.status(200).json({ success: true, data });
 });
 
-router.get("/categories/:id", async (req, res) => {
+router.get("/categories/:id", catalogReadLimiter, async (req, res) => {
   const id = validate(idSchema, req.params.id);
   const data = await service.getCategory(id);
 
   return res.status(200).json({ success: true, data });
 });
 
-router.get("/products", async (req, res) => {
+router.get("/products", catalogReadLimiter, async (req, res) => {
   const filters = validate(productListSchema, req.query);
   const result = await service.getProducts(filters);
 
@@ -109,11 +113,24 @@ router.get("/products", async (req, res) => {
   });
 });
 
-router.get("/products/:id", async (req, res) => {
+router.get("/products/:id", catalogReadLimiter, async (req, res) => {
   const id = validate(idSchema, req.params.id);
   const data = await service.getProduct(id);
 
   return res.status(200).json({ success: true, data });
+});
+
+router.get("/products/scroll", catalogReadLimiter, async (req, res) => {
+  // Client limit/category/cursor validate karo.
+  const filters = validate(scrollProductSchema, req.query);
+
+  const result = await service.scrollProductCatalog(filters);
+
+  return res.status(200).json({
+    success: true,
+    data: result.products,
+    pagination: result.pagination,
+  });
 });
 
 export default router;

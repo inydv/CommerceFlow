@@ -275,3 +275,71 @@ export async function archiveProductRow(id) {
 
   return result.rows[0] ?? null;
 }
+
+// Keyset pagination using (created_at, id).
+// The two columns match the existing composite B-tree
+// ordering used by the Catalog indexes.
+//
+// WHY: Multiple products can have identical timestamps;
+// UUID makes the ordering deterministic.
+export async function scrollProducts(filters) {
+  const values = [];
+
+  const conditions = ["p.status = 'active'", "c.is_active = TRUE"];
+
+  // Category filtering uses the first column of
+  // products_active_category_recent_idx.
+  if (filters.categoryId) {
+    values.push(filters.categoryId);
+
+    conditions.push(`p.category_id = $${values.length}::uuid`);
+  }
+
+  if (filters.cursor) {
+    values.push(filters.cursor.createdAt);
+    const timestampPosition = values.length;
+
+    values.push(filters.cursor.id);
+    const idPosition = values.length;
+
+    // DESC ordering means next rows have SMALLER sort keys.
+    // SQL row comparison checks timestamp first, UUID second.
+    conditions.push(
+      `(p.created_at, p.id) <
+       ($${timestampPosition}::timestamptz,
+        $${idPosition}::uuid)`,
+    );
+  }
+
+  // Request one additional row to detect a next page.
+  values.push(filters.limit + 1);
+
+  const result = await pool.query(
+    `SELECT
+       p.id,
+       p.sku,
+       p.name,
+       p.price_minor::text AS "priceMinor",
+       p.currency_code AS "currencyCode",
+       p.category_id AS "categoryId",
+       c.name AS "categoryName",
+
+       -- Do NOT convert to JS Date for cursor construction.
+       -- Preserve PostgreSQL's six fractional digits.
+       to_char(
+         p.created_at AT TIME ZONE 'UTC',
+         'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+       ) AS "cursorCreatedAt"
+
+     FROM products p
+     JOIN categories c ON c.id = p.category_id
+
+     WHERE ${conditions.join(" AND ")}
+
+     ORDER BY p.created_at DESC, p.id DESC
+     LIMIT $${values.length}`,
+    values,
+  );
+
+  return result.rows;
+}

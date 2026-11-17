@@ -1,5 +1,6 @@
 import { Router } from "express";
-import { rateLimit } from "express-rate-limit";
+
+import { authLimiter } from "../../common/rate-limit/limiter.js";
 
 import {
   registerSchema,
@@ -20,24 +21,6 @@ import {
 import { requireAuth, requireRole } from "./auth.middleware.js";
 
 const router = Router();
-
-// In-memory auth endpoint rate limiting.
-// WHY: Login/register brute-force attempts reduce karna.
-// LIMITATION: Multi-instance deployment mein shared Redis
-// rate-limit store use karenge.
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 20,
-  standardHeaders: "draft-7",
-  legacyHeaders: false,
-  message: {
-    success: false,
-    error: {
-      code: "RATE_LIMITED",
-      message: "Too many requests. Try again later.",
-    },
-  },
-});
 
 // Registration: Public account creation.
 // Server always customer role assign karega.

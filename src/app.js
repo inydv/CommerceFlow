@@ -6,6 +6,7 @@ import { logger } from "./common/logger/logger.js";
 import { AppError } from "./common/errors/app-error.js";
 import { errorHandler } from "./common/middleware/error-handler.js";
 import { checkDatabase } from "./config/database.js";
+import { checkRedis } from "./config/redis.js";
 
 import apiRoutes from "./routes/index.js";
 
@@ -103,6 +104,7 @@ app.get("/health/ready", async (req, res) => {
   try {
     // Current DB connectivity verify karo.
     await checkDatabase();
+    await checkRedis();
 
     return res.status(200).json({
       success: true,

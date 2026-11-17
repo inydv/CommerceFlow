@@ -95,3 +95,25 @@ export const productListSchema = z.strictObject({
 
   categoryId: z.uuid().optional(),
 });
+
+// Cursor APIs are forward-only for this version.
+//
+// WHY: We need a stable sorting key instead of deep OFFSET.
+// Cursor is bounded to prevent unreasonably large input.
+export const scrollProductSchema = z.strictObject({
+  limit: z
+    .string()
+    .regex(/^[0-9]+$/)
+    .default("20")
+    .transform(Number)
+    .pipe(z.number().int().min(1).max(100)),
+
+  categoryId: z.uuid().optional(),
+
+  cursor: z
+    .string()
+    .min(1)
+    .max(1024)
+    .regex(/^[A-Za-z0-9_-]+$/)
+    .optional(),
+});

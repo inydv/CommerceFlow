@@ -51,3 +51,14 @@ npm run demo:webhook -- payment.succeeded PAYMENT_INTENT_UUID
 npm run demo:webhook -- payment.failed YOUR_NEW_PAYMENT_INTENT_UUID
 
 ======================================================================================================
+
+# PostgreSQL query optimization script
+
+psql -U commerceflow_user \
+ -h 127.0.0.1 \
+ -d commerceflow_db \
+ -X \
+ -v ON_ERROR_STOP=1 \
+ -f scripts/sql/005_performance.sql
+
+======================================================================================================

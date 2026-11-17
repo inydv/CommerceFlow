@@ -13,7 +13,8 @@
     "db:migrate": "node scripts/database/migrate.js",
     "db:seed": "node scripts/database/seed-catalog.js",
     "worker": "node src/jobs/worker.js",
-    "demo:webhook": "node scripts/development/send-payment-webhook.js"
+    "demo:webhook": "node scripts/development/send-payment-webhook.js",
+    "bench:api": "node scripts/benchmarks/api-benchmark.js"
   },
   "dependencies": {
     "argon2": "^0.45.2",
@@ -26,6 +27,7 @@
     "pg": "^8.23.1",
     "pino": "^10.4.0",
     "pino-http": "^11.0.0",
+    "rate-limit-redis": "^6.0.2",
     "zod": "^4.6.7"
   }
 }

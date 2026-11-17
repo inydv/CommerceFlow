@@ -4,6 +4,8 @@ import { logger } from "./common/logger/logger.js";
 
 import { connectDatabase, closeDatabase } from "./config/database.js";
 
+import { checkRedis, closeRedis } from "./config/redis.js";
+
 // Graceful shutdown same time par multiple baar nahi chalna chahiye.
 let isShuttingDown = false;
 
@@ -13,6 +15,7 @@ async function start() {
     // WHY: Required database unavailable hai toh HTTP traffic
     // accept karke requests fail nahi karwana chahte.
     await connectDatabase();
+    await checkRedis();
 
     // SECOND: HTTP listener start karo.
     // Promise tab resolve hogi jab server listening start karega.
@@ -71,6 +74,7 @@ async function start() {
         // HTTP requests drain hone ke baad DB pool close karo.
         // WHY: Active request ki DB query prematurely interrupt na ho.
         await closeDatabase();
+        await closeRedis();
 
         logger.info("Graceful shutdown completed");
       } catch (error) {
@@ -98,6 +102,7 @@ async function start() {
     // Even failed startups should release DB resources.
     try {
       await closeDatabase();
+      await closeRedis();
     } catch (cleanupError) {
       logger.error(
         { err: cleanupError },
