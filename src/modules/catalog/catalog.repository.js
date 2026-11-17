@@ -343,3 +343,29 @@ export async function scrollProducts(filters) {
 
   return result.rows;
 }
+
+// Fetch multiple products in ONE database round trip.
+//
+// WHY: Repeated per-product DB calls increase network
+// round trips and can create an N+1-like access pattern.
+//
+// Maximum 100 IDs will be enforced by route validation.
+export async function findProductsByIds(ids) {
+  const result = await pool.query(
+    `SELECT
+       p.id,
+       p.sku,
+       p.name,
+       p.price_minor::text AS "priceMinor",
+       p.status,
+       p.category_id AS "categoryId",
+       c.name AS "categoryName"
+     FROM products p
+     JOIN categories c ON c.id = p.category_id
+     WHERE p.id = ANY($1::uuid[])
+     ORDER BY p.id`,
+    [ids],
+  );
+
+  return result.rows;
+}

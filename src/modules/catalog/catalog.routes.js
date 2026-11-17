@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { z } from "zod";
 
 import { catalogReadLimiter } from "../../common/rate-limit/limiter.js";
 
@@ -130,6 +131,33 @@ router.get("/products/scroll", catalogReadLimiter, async (req, res) => {
     success: true,
     data: result.products,
     pagination: result.pagination,
+  });
+});
+
+// Admin-only batch lookup.
+//
+// WHY: One request replaces repeated individual requests.
+// Strict maximum prevents a client from submitting
+// extremely large ID arrays.
+//
+// Register before generic routes for clarity.
+router.post("/admin/products/batch", ...admin, async (req, res) => {
+  const schema = z.strictObject({
+    ids: z.array(z.uuid()).min(1).max(100),
+  });
+
+  const input = validate(schema, req.body);
+
+  // Deduplicate IDs before hitting database.
+  const uniqueIds = [...new Set(input.ids)];
+
+  const products = await service.getProductsByIds(uniqueIds);
+
+  return res.json({
+    success: true,
+    data: products,
+    requested: uniqueIds.length,
+    returned: products.length,
   });
 });
 

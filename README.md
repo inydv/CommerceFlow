@@ -62,3 +62,23 @@ psql -U commerceflow_user \
  -f scripts/sql/005_performance.sql
 
 ======================================================================================================
+
+# Event Loop — Blocking vs Non-blocking
+
+node scripts/labs/01-event-loop.js sync
+node scripts/labs/01-event-loop.js async
+
+======================================================================================================
+
+# Memory Leaks & Heap Profiling
+
+node --expose-gc scripts/labs/04-memory.js bounded
+node --expose-gc scripts/labs/04-memory.js retained
+
+For heap profiling:
+mkdir -p artifacts/local
+node --heap-prof \
+ --heap-prof-dir=artifacts/local \
+ scripts/labs/04-memory.js retained
+
+======================================================================================================

@@ -1,12 +1,15 @@
 import express from "express";
 import pinoHttp from "pino-http";
 import { randomUUID } from "node:crypto";
+import helmet from "helmet";
+import compression from "compression";
 
 import { logger } from "./common/logger/logger.js";
 import { AppError } from "./common/errors/app-error.js";
 import { errorHandler } from "./common/middleware/error-handler.js";
 import { checkDatabase } from "./config/database.js";
 import { checkRedis } from "./config/redis.js";
+import { httpMetrics } from "./common/monitoring/http-metrics.js";
 
 import apiRoutes from "./routes/index.js";
 
@@ -14,6 +17,44 @@ import apiRoutes from "./routes/index.js";
 // Yahan HTTP listener start nahi karte.
 // WHY: Routing configuration aur server lifecycle separate rahe.
 export const app = express();
+
+// Avoid advertising the Express implementation in response headers.
+app.disable("x-powered-by");
+
+// HTTP security headers: frame restrictions, content type
+// sniffing protection, and other browser security defaults.
+//
+// WHY: These protect against several browser-side attack
+// classes, though they don't replace authentication,
+// authorization, validation or HTTPS.
+app.use(helmet());
+
+// Compress sufficiently large responses.
+// WHY: Large JSON responses may use less network bandwidth.
+//
+// TRADEOFF: Compression consumes CPU resources.
+// Small responses can cost more to compress than they save.
+//
+// compression() also supports streamed responses, but
+// compression efficiency depends on content and client headers.
+app.use(
+  compression({
+    threshold: 1024,
+
+    // Only compress the types we explicitly want here.
+    // CSV exports and other responses stay as configured
+    // unless their content type matches the filter.
+    filter: (req, res) => {
+      const type = res.getHeader("Content-Type");
+
+      if (typeof type === "string" && type.toLowerCase().includes("text/csv")) {
+        return false;
+      }
+
+      return compression.filter(req, res);
+    },
+  }),
+);
 
 // Har HTTP request ko unique ID aur structured logs do.
 // WHY: Multiple concurrent requests ke errors correlate karna easy hoga.
@@ -54,6 +95,8 @@ app.use(
     },
   }),
 );
+
+app.use(httpMetrics);
 
 // JSON body parser and 100 KB size limit.
 // WITHOUT LIMIT: Extremely large request bodies memory pressure

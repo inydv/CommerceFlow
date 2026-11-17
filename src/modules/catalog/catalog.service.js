@@ -446,3 +446,10 @@ export async function scrollProductCatalog(filters) {
     },
   };
 }
+
+// Admin batch lookup reads PostgreSQL directly.
+// WHY: Admin may need draft/archived product records.
+// Public Catalog cache must not leak internal records.
+export async function getProductsByIds(ids) {
+  return db.findProductsByIds(ids);
+}
