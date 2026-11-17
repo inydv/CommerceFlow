@@ -40,6 +40,19 @@ const envSchema = z.object({
       /^[0-9a-fA-F]{64}$/,
       "JWT_ACCESS_SECRET must be 64 hexadecimal characters",
     ),
+
+  // Redis is used by BullMQ for background job delivery.
+  // WITHOUT REDIS: Background queues cannot process jobs.
+  REDIS_URL: z
+    .string()
+    .startsWith("redis://")
+    .or(z.string().startsWith("rediss://")),
+
+  // HMAC secret used only by local signed webhook simulator.
+  // WHY: An arbitrary HTTP caller must not mark orders as paid.
+  // WITHOUT SIGNATURE VERIFICATION: Fake payment callbacks
+  // could fraudulently change order/stock state.
+  PAYMENT_WEBHOOK_SECRET: z.string().regex(/^[0-9a-fA-F]{64}$/),
 });
 
 // safeParse exception throw karne ke bajaye result return karta hai.

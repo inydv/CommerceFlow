@@ -57,7 +57,21 @@ app.use(
 // JSON body parser and 100 KB size limit.
 // WITHOUT LIMIT: Extremely large request bodies memory pressure
 // create kar sakti hain.
-app.use(express.json({ limit: "100kb" }));
+app.use(
+  express.json({
+    limit: "100kb",
+
+    // Express calls verify before JSON parsing.
+    // WHY: HMAC signature original request bytes par based hai.
+    // JSON.stringify(req.body) original spacing/key order
+    // change kar sakta hai, signature verification fail hogi.
+    verify: (req, res, buffer) => {
+      if (req.originalUrl === "/api/v1/payments/webhooks/demo") {
+        req.rawBody = Buffer.from(buffer);
+      }
+    },
+  }),
+);
 
 // Startup/shutdown readiness state.
 // WHY: Alive server aur ready server alag concepts hain.

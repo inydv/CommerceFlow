@@ -44,3 +44,10 @@ npm run db:seed -- medium
 npm run db:seed -- large
 
 ======================================================================================================
+
+# webhook event simulate karne ke liye
+
+npm run demo:webhook -- payment.succeeded PAYMENT_INTENT_UUID
+npm run demo:webhook -- payment.failed YOUR_NEW_PAYMENT_INTENT_UUID
+
+======================================================================================================

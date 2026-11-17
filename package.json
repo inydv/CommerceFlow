@@ -11,13 +11,17 @@
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
     "db:migrate": "node scripts/database/migrate.js",
-    "db:seed": "node scripts/database/seed-catalog.js"
+    "db:seed": "node scripts/database/seed-catalog.js",
+    "worker": "node src/jobs/worker.js",
+    "demo:webhook": "node scripts/development/send-payment-webhook.js"
   },
   "dependencies": {
     "argon2": "^0.45.2",
+    "bullmq": "^6.7.7",
     "dotenv": "^18.0.10",
     "express": "^5.3.0",
     "express-rate-limit": "^8.7.4",
+    "ioredis": "^6.0.0",
     "jose": "^6.2.17",
     "pg": "^8.23.1",
     "pino": "^10.4.0",
