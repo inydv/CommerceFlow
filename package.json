@@ -10,7 +10,8 @@
   "scripts": {
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
-    "db:migrate": "node scripts/database/migrate.js"
+    "db:migrate": "node scripts/database/migrate.js",
+    "db:seed": "node scripts/database/seed-catalog.js"
   },
   "dependencies": {
     "argon2": "^0.45.2",

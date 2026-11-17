@@ -26,3 +26,21 @@ npm pkg set private=true
 npm pkg set 'engines.node=>=24'
 
 ======================================================================================================
+
+# Apply database changes first.
+
+npm run db:migrate
+
+# Generate 1,000 products.
+
+npm run db:seed -- small
+
+# Increase cumulative seed dataset to 10,000.
+
+npm run db:seed -- medium
+
+# Increase to 100,000 (if machine resources permit).
+
+npm run db:seed -- large
+
+======================================================================================================
